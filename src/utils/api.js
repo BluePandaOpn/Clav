@@ -54,6 +54,23 @@ export const api = {
   async listTrustedDevices() {
     return request(`${API_BASE}/devices`);
   },
+  async registerDeviceKey(payload) {
+    return request(`${API_BASE}/devices/register-key`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async listShareTargets() {
+    return request(`${API_BASE}/devices/share-targets`);
+  },
+  async createCredentialSharePackage(payload) {
+    return request(`${API_BASE}/share/credential`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
   async listAuditLogs(limit = 60) {
     return request(`${API_BASE}/audit?limit=${encodeURIComponent(limit)}`);
   }

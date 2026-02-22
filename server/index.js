@@ -7,12 +7,15 @@ import {
   addAuditLog,
   addTrustedDevice,
   clearCredentials,
+  createCredentialSharePackage,
   createCredential,
   deleteCredential,
+  listShareTargets,
   listAuditLogs,
   listCredentials,
   listTrustedDevices,
   readStore,
+  upsertDeviceEncryptionKey,
   updateCredential
 } from "./store.js";
 import { generatePassword, getStrength } from "./password.js";
@@ -186,6 +189,61 @@ api.get(
   })
 );
 
+api.post(
+  "/devices/register-key",
+  asyncHandler(async (req, res) => {
+    const { deviceId, label, publicKeyPem } = req.body || {};
+    if (!deviceId || !publicKeyPem) {
+      return res.status(400).json({ error: "deviceId and publicKeyPem are required" });
+    }
+
+    const item = await upsertDeviceEncryptionKey({
+      deviceId: String(deviceId),
+      label: String(label || "device"),
+      publicKeyPem: String(publicKeyPem),
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+
+    await addAuditLog({
+      type: "DEVICE_KEY_REGISTERED",
+      detail: item.id,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+
+    return res.status(201).json({ item });
+  })
+);
+
+api.get(
+  "/devices/share-targets",
+  asyncHandler(async (_req, res) => {
+    const items = await listShareTargets();
+    return res.json({ items });
+  })
+);
+
+api.post(
+  "/share/credential",
+  asyncHandler(async (req, res) => {
+    const { credentialId, targetDeviceId } = req.body || {};
+    if (!credentialId || !targetDeviceId) {
+      return res.status(400).json({ error: "credentialId and targetDeviceId are required" });
+    }
+
+    const pkg = await createCredentialSharePackage(String(credentialId), String(targetDeviceId));
+    await addAuditLog({
+      type: "CREDENTIAL_SHARED_PACKAGE_CREATED",
+      detail: `${credentialId}->${targetDeviceId}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+
+    return res.status(201).json({ package: pkg });
+  })
+);
+
 api.get(
   "/audit",
   asyncHandler(async (req, res) => {
@@ -245,7 +303,7 @@ app.use((_req, res) => {
   res.status(404).json({ error: "not found" });
 });
 
-app.use((error, _req, res, _next) => {
+app.use((error, _req, res) => {
   const status = error?.statusCode || 500;
   res.status(status).json({ error: status === 500 ? "internal error" : error.message });
 });

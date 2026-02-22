@@ -1,13 +1,18 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Copy, Download, Lock, Shield, Trash } from "lucide-react";
 import { api } from "../utils/api.js";
 
-export default function SettingsPage({ clearAll, pushToast, items, security }) {
+export default function SettingsPage({ clearAll, pushToast, items, security, addItem }) {
   const [qr, setQr] = useState(null);
   const [qrImage, setQrImage] = useState("");
   const [deviceLabel, setDeviceLabel] = useState("desktop-main");
   const [devices, setDevices] = useState([]);
   const [audit, setAudit] = useState([]);
+  const [shareTargets, setShareTargets] = useState([]);
+  const [selectedCredentialId, setSelectedCredentialId] = useState("");
+  const [selectedTargetDeviceId, setSelectedTargetDeviceId] = useState("");
+  const [sharePackageText, setSharePackageText] = useState("");
+  const [incomingPackageText, setIncomingPackageText] = useState("");
 
   useEffect(() => {
     loadSecurityData();
@@ -38,9 +43,14 @@ export default function SettingsPage({ clearAll, pushToast, items, security }) {
 
   const loadSecurityData = async () => {
     try {
-      const [devRes, auditRes] = await Promise.all([api.listTrustedDevices(), api.listAuditLogs(30)]);
+      const [devRes, auditRes, shareRes] = await Promise.all([
+        api.listTrustedDevices(),
+        api.listAuditLogs(30),
+        api.listShareTargets()
+      ]);
       setDevices(devRes.items || []);
       setAudit(auditRes.items || []);
+      setShareTargets(shareRes.items || []);
     } catch {
       // Silent by design in settings panel.
     }
@@ -80,6 +90,64 @@ export default function SettingsPage({ clearAll, pushToast, items, security }) {
       pushToast("QR seguro generado", "success");
     } catch (error) {
       pushToast(error.message, "error");
+    }
+  };
+
+  const registerDeviceKey = async () => {
+    try {
+      const pair = await security.ensureDeviceKeyPair();
+      await api.registerDeviceKey({
+        deviceId: pair.deviceId,
+        label: deviceLabel || "device",
+        publicKeyPem: pair.publicKeyPem
+      });
+      await loadSecurityData();
+      pushToast("Llave de dispositivo registrada", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    }
+  };
+
+  const createSharePackage = async () => {
+    if (!selectedCredentialId || !selectedTargetDeviceId) {
+      pushToast("Selecciona credencial y dispositivo destino", "error");
+      return;
+    }
+
+    try {
+      const data = await api.createCredentialSharePackage({
+        credentialId: selectedCredentialId,
+        targetDeviceId: selectedTargetDeviceId
+      });
+      const text = JSON.stringify(data.package, null, 2);
+      setSharePackageText(text);
+      await navigator.clipboard.writeText(text);
+      pushToast("Paquete cifrado generado y copiado", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    }
+  };
+
+  const importSharedPackage = async () => {
+    if (!incomingPackageText.trim()) {
+      pushToast("Pega un paquete cifrado primero", "error");
+      return;
+    }
+
+    try {
+      const pkg = JSON.parse(incomingPackageText);
+      const credential = await security.decryptSharedPackage(pkg);
+      await addItem({
+        service: credential.service,
+        username: credential.username,
+        password: credential.password,
+        category: credential.category || "General",
+        notes: credential.notes || ""
+      });
+      pushToast(`Credencial importada: ${credential.service}`, "success");
+      setIncomingPackageText("");
+    } catch (error) {
+      pushToast(`No se pudo importar: ${error.message}`, "error");
     }
   };
 
@@ -141,6 +209,57 @@ export default function SettingsPage({ clearAll, pushToast, items, security }) {
               </button>
             </div>
           ) : null}
+        </article>
+
+        <article className="action-card">
+          <h3>Compartir entre dispositivos</h3>
+          <p>Registra una llave RSA por dispositivo y genera paquetes cifrados hibridos.</p>
+          <button className="primary-btn" type="button" onClick={registerDeviceKey}>
+            <Shield size={16} /> Registrar llave de este dispositivo
+          </button>
+          <label>
+            Credencial a compartir
+            <select value={selectedCredentialId} onChange={(e) => setSelectedCredentialId(e.target.value)}>
+              <option value="">Seleccionar...</option>
+              {items.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.service} ({item.username || "sin usuario"})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Dispositivo destino
+            <select value={selectedTargetDeviceId} onChange={(e) => setSelectedTargetDeviceId(e.target.value)}>
+              <option value="">Seleccionar...</option>
+              {shareTargets.map((target) => (
+                <option key={target.id} value={target.id}>
+                  {target.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="primary-btn" type="button" onClick={createSharePackage}>
+            <Copy size={16} /> Generar paquete cifrado
+          </button>
+          {sharePackageText ? (
+            <label>
+              Ultimo paquete generado
+              <textarea rows={5} value={sharePackageText} onChange={(e) => setSharePackageText(e.target.value)} />
+            </label>
+          ) : null}
+          <label>
+            Importar paquete recibido
+            <textarea
+              rows={5}
+              placeholder="Pega aqui el JSON de paquete cifrado"
+              value={incomingPackageText}
+              onChange={(e) => setIncomingPackageText(e.target.value)}
+            />
+          </label>
+          <button className="primary-btn" type="button" onClick={importSharedPackage}>
+            <Download size={16} /> Descifrar paquete localmente
+          </button>
         </article>
       </div>
 

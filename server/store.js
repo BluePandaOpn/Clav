@@ -3,6 +3,8 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { decryptWithLayers, encryptWithLayers } from "./multilayer-crypto.js";
+import { signCredentialEntry, verifyCredentialEntry } from "./entry-signature.js";
+import { createHybridSharePackage } from "./hybrid-share.js";
 
 const DB_FILE = new URL("./data/vault.json", import.meta.url);
 const DB_FILE_PATH = fileURLToPath(DB_FILE);
@@ -50,7 +52,7 @@ export async function createCredential(payload) {
   const db = await readStore();
   const now = new Date().toISOString();
   const id = randomUUID();
-  const item = {
+  const unsignedItem = {
     id,
     service: payload.service,
     username: payload.username || "",
@@ -59,6 +61,10 @@ export async function createCredential(payload) {
     notes: payload.notes || "",
     createdAt: now,
     updatedAt: now
+  };
+  const item = {
+    ...unsignedItem,
+    signature: signCredentialEntry(unsignedItem)
   };
   db.credentials.unshift(item);
   await writeStore(db);
@@ -75,7 +81,7 @@ export async function updateCredential(id, payload) {
       ? encryptWithLayers(payload.password, id)
       : existing.passwordEnc;
 
-  db.credentials[index] = {
+  const updatedItem = {
     ...existing,
     service: payload.service ?? existing.service,
     username: payload.username ?? existing.username,
@@ -83,6 +89,10 @@ export async function updateCredential(id, payload) {
     notes: payload.notes ?? existing.notes,
     passwordEnc,
     updatedAt: new Date().toISOString()
+  };
+  db.credentials[index] = {
+    ...updatedItem,
+    signature: signCredentialEntry(updatedItem)
   };
   await writeStore(db);
   return materializeCredential(db.credentials[index]);
@@ -106,6 +116,97 @@ export async function clearCredentials() {
 export async function listTrustedDevices() {
   const db = await readStore();
   return db.trustedDevices;
+}
+
+export async function upsertDeviceEncryptionKey(payload) {
+  if (!payload?.publicKeyPem || !payload?.deviceId) {
+    throw new Error("deviceId and publicKeyPem are required.");
+  }
+
+  const db = await readStore();
+  const now = new Date().toISOString();
+  const index = db.trustedDevices.findIndex((item) => item.id === payload.deviceId);
+  const current = index >= 0 ? db.trustedDevices[index] : null;
+
+  const merged = {
+    id: payload.deviceId,
+    label: payload.label || current?.label || "device",
+    ip: payload.ip || current?.ip || "n/a",
+    userAgent: payload.userAgent || current?.userAgent || "n/a",
+    source: current?.source || "device_key",
+    createdAt: current?.createdAt || now,
+    updatedAt: now,
+    encryptionPublicKeyPem: payload.publicKeyPem
+  };
+
+  if (index >= 0) {
+    db.trustedDevices[index] = merged;
+  } else {
+    db.trustedDevices.unshift(merged);
+  }
+
+  db.trustedDevices = db.trustedDevices.slice(0, 100);
+  await writeStore(db);
+
+  return {
+    id: merged.id,
+    label: merged.label,
+    createdAt: merged.createdAt,
+    updatedAt: merged.updatedAt
+  };
+}
+
+export async function listShareTargets() {
+  const db = await readStore();
+  return db.trustedDevices
+    .filter((item) => Boolean(item.encryptionPublicKeyPem))
+    .map((item) => ({
+      id: item.id,
+      label: item.label,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt || item.createdAt
+    }));
+}
+
+export async function createCredentialSharePackage(credentialId, targetDeviceId) {
+  const db = await readStore();
+  const target = db.trustedDevices.find((item) => item.id === targetDeviceId);
+  if (!target?.encryptionPublicKeyPem) {
+    const err = new Error("Target device does not have a registered encryption key.");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const credential = db.credentials.find((item) => item.id === credentialId);
+  if (!credential) {
+    const err = new Error("Credential not found.");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (credential.signature && !verifyCredentialEntry(credential)) {
+    const err = new Error("Credential signature invalid. Sharing blocked.");
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const password = decryptWithLayers(credential.passwordEnc, credential.id);
+  const packagePayload = {
+    id: credential.id,
+    service: credential.service,
+    username: credential.username || "",
+    password,
+    category: credential.category || "General",
+    notes: credential.notes || "",
+    createdAt: credential.createdAt,
+    updatedAt: credential.updatedAt
+  };
+
+  return createHybridSharePackage(packagePayload, target.encryptionPublicKeyPem, {
+    credentialId: credential.id,
+    targetDeviceId: target.id,
+    createdAt: new Date().toISOString()
+  });
 }
 
 export async function addTrustedDevice(payload) {
@@ -152,11 +253,19 @@ function materializeCredential(item) {
     return item;
   }
 
+  const hasSignature = Boolean(item.signature?.sig);
+  const signatureValid = hasSignature ? verifyCredentialEntry(item) : null;
+  const integrity = !hasSignature ? "legacy_unsigned" : signatureValid ? "verified" : "tampered";
+
   let password = "";
-  try {
-    password = decryptWithLayers(item.passwordEnc, item.id);
-  } catch {
-    password = "[DECRYPTION_ERROR]";
+  if (integrity === "tampered") {
+    password = "[SIGNATURE_INVALID]";
+  } else {
+    try {
+      password = decryptWithLayers(item.passwordEnc, item.id);
+    } catch {
+      password = "[DECRYPTION_ERROR]";
+    }
   }
 
   return {
@@ -167,7 +276,8 @@ function materializeCredential(item) {
     category: item.category || "General",
     notes: item.notes || "",
     createdAt: item.createdAt,
-    updatedAt: item.updatedAt
+    updatedAt: item.updatedAt,
+    integrity
   };
 }
 
