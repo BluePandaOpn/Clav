@@ -4,7 +4,7 @@ import PasswordStrength from "../components/PasswordStrength.jsx";
 import { api } from "../utils/api.js";
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
 
-export default function GeneratorPage({ setGeneratedPassword, pushToast }) {
+export default function GeneratorPage({ setGeneratedPassword, pushToast, presentationModeEnabled }) {
   const [password, setPassword] = useLocalStorage("generator_last_password", "");
   const [options, setOptions] = useLocalStorage("generator_options", {
     length: 16,
@@ -28,6 +28,10 @@ export default function GeneratorPage({ setGeneratedPassword, pushToast }) {
   };
 
   const copy = async () => {
+    if (presentationModeEnabled) {
+      pushToast("Modo presentacion: copy bloqueado", "info");
+      return;
+    }
     if (!password) return;
     await navigator.clipboard.writeText(password);
     pushToast("Password copiado", "success");
@@ -42,9 +46,13 @@ export default function GeneratorPage({ setGeneratedPassword, pushToast }) {
 
       <div className="panel generator">
         <div className="generated">
-          <code>{password || "Haz clic en generar para crear un password seguro"}</code>
+          <code>
+            {presentationModeEnabled
+              ? "[PRESENTATION_MODE]"
+              : password || "Haz clic en generar para crear un password seguro"}
+          </code>
           <div className="inline-actions">
-            <button className="icon-btn" onClick={copy} type="button">
+            <button className="icon-btn" onClick={copy} type="button" disabled={presentationModeEnabled}>
               <Copy size={16} />
             </button>
             <button className="icon-btn" onClick={generate} type="button">

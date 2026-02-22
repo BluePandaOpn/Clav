@@ -20,6 +20,7 @@ Gestor de passwords profesional con:
 - Auto-lock inteligente (0.1.6): bloqueo por inactividad, pestana, foco y salida de mouse
 - Autocompletado estilo Bitwarden (2.1): extension para Chrome/Firefox/Edge con llenado de login
 - Modo viaje (0.2.2): oculta temporalmente credenciales sensibles durante desplazamientos
+- Modo presentacion (0.2.3): oculta datos sensibles al compartir pantalla
 
 ## Requisitos
 

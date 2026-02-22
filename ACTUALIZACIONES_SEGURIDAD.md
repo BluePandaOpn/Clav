@@ -58,6 +58,13 @@ Fecha: 2026-02-22
   - No permite copiar credenciales sensibles.
   - Se muestra estado de expiracion del modo viaje.
 
+## 0.2.3 - Modo presentacion
+
+- Nuevo interruptor global en `Settings` para compartir pantalla de forma segura.
+- Oculta username, password y notas en tarjetas mientras esta activo.
+- Bloquea acciones de copy/reveal de credenciales en `Vault`.
+- Oculta username en `Dashboard` y password generado en `Generator`.
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

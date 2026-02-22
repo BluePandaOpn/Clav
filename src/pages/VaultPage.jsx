@@ -24,7 +24,8 @@ export default function VaultPage({
   generateHoneyPasswords,
   triggerHoneyAccess,
   checkCredentialBreach,
-  travelModeActive
+  travelModeActive,
+  presentationModeEnabled
 }) {
   const [form, setForm] = useState(initialForm);
   const [search, setSearch] = useLocalStorage("vault_search", "");
@@ -68,6 +69,10 @@ export default function VaultPage({
   };
 
   const onCopy = async (item) => {
+    if (presentationModeEnabled) {
+      pushToast("Modo presentacion: copy bloqueado", "info");
+      return;
+    }
     if (travelModeActive && item.isSensitive) {
       pushToast("Modo viaje: copy bloqueado para credenciales sensibles", "info");
       return;
@@ -90,6 +95,10 @@ export default function VaultPage({
   };
 
   const onReveal = async (item) => {
+    if (presentationModeEnabled) {
+      pushToast("Modo presentacion: reveal bloqueado", "info");
+      return;
+    }
     if (travelModeActive && item.isSensitive) {
       pushToast("Modo viaje: reveal bloqueado para credenciales sensibles", "info");
       return;
@@ -226,6 +235,7 @@ export default function VaultPage({
                   onCopy={onCopy}
                   onReveal={onReveal}
                   travelModeActive={travelModeActive}
+                  presentationModeEnabled={presentationModeEnabled}
                 />
                 <div className="inline-actions">
                   <button className="icon-btn" type="button" onClick={() => checkBreachNow(item)}>

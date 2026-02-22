@@ -44,6 +44,10 @@ export default function App() {
   );
   const [travelModeExpiresAt, setTravelModeExpiresAt] = useLocalStorage("vault_travel_mode_expires_at_v022", null);
   const travelModeActive = Boolean(travelModeEnabled && travelModeExpiresAt && Date.now() < travelModeExpiresAt);
+  const [presentationModeEnabled, setPresentationModeEnabled] = useLocalStorage(
+    "vault_presentation_mode_enabled_v023",
+    false
+  );
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -121,6 +125,16 @@ export default function App() {
     pushToast("Modo viaje desactivado", "info");
   };
 
+  const activatePresentationMode = () => {
+    setPresentationModeEnabled(true);
+    pushToast("Modo presentacion activado", "info");
+  };
+
+  const deactivatePresentationMode = () => {
+    setPresentationModeEnabled(false);
+    pushToast("Modo presentacion desactivado", "info");
+  };
+
   const shared = {
     items,
     loading,
@@ -149,7 +163,10 @@ export default function App() {
     setTravelModeDurationMinutes,
     travelModeExpiresAt,
     activateTravelMode,
-    deactivateTravelMode
+    deactivateTravelMode,
+    presentationModeEnabled,
+    activatePresentationMode,
+    deactivatePresentationMode
   };
 
   if (pathname === "/unlock-qr") {

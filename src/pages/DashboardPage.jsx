@@ -13,7 +13,7 @@ function Stat({ icon: Icon, label, value }) {
   );
 }
 
-export default function DashboardPage({ items, stats }) {
+export default function DashboardPage({ items, stats, presentationModeEnabled }) {
   const latest = items.slice(0, 5);
   const compromised = items.filter((item) => item?.breachStatus?.compromised).length;
   return (
@@ -39,7 +39,7 @@ export default function DashboardPage({ items, stats }) {
             {latest.map((item) => (
               <li key={item.id}>
                 <strong>{item.service}</strong>
-                <span>{item.username || "sin usuario"}</span>
+                <span>{presentationModeEnabled ? "[PRESENTATION_MODE]" : item.username || "sin usuario"}</span>
               </li>
             ))}
           </ul>

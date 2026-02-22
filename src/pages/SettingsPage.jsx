@@ -20,7 +20,10 @@ export default function SettingsPage({
   setTravelModeDurationMinutes,
   travelModeExpiresAt,
   activateTravelMode,
-  deactivateTravelMode
+  deactivateTravelMode,
+  presentationModeEnabled,
+  activatePresentationMode,
+  deactivatePresentationMode
 }) {
   const [qr, setQr] = useState(null);
   const [qrImage, setQrImage] = useState("");
@@ -401,6 +404,20 @@ export default function SettingsPage({
       </div>
 
       <div className="panel settings-grid security-grid">
+        <article className="action-card">
+          <h3>0.2.3 Modo presentacion</h3>
+          <p>Oculta datos sensibles temporalmente cuando compartes pantalla.</p>
+          <small className="muted">Estado: {presentationModeEnabled ? "ACTIVO" : "inactivo"}</small>
+          <div className="inline-actions">
+            <button className="primary-btn" type="button" onClick={activatePresentationMode} disabled={presentationModeEnabled}>
+              Activar
+            </button>
+            <button className="icon-btn" type="button" onClick={deactivatePresentationMode} disabled={!presentationModeEnabled}>
+              Desactivar
+            </button>
+          </div>
+        </article>
+
         <article className="action-card">
           <h3>0.2.2 Modo viaje</h3>
           <p>Oculta temporalmente credenciales sensibles mientras viajas.</p>
