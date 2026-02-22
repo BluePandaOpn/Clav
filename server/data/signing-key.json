@@ -1,0 +1,7 @@
+{
+  "alg": "ed25519",
+  "kid": "vault-signing-ed25519-v1",
+  "privateKeyPem": "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEILazCVGyjYgL/u4AJFMFgkw0HBV+fT9fZWo819pgmSVW\n-----END PRIVATE KEY-----\n",
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEANEZPFq7NFOGCGpn2BAdJ7Pp2mkBsVo8eW/u75SWq6u8=\n-----END PUBLIC KEY-----\n",
+  "createdAt": "2026-02-22T13:42:30.145Z"
+}

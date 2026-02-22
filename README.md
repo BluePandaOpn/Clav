@@ -16,6 +16,7 @@ Gestor de passwords profesional con:
 - Registro automatico de dispositivos confiables + bitacora de seguridad
 - Autenticacion basada en hardware (0.1.3): WebAuthn/Passkeys, YubiKey y NFC unlock experimental local
 - Honey passwords (0.1.4): credenciales senuelo para deteccion de accesos no autorizados
+- Deteccion de brechas (0.1.5): HIBP + base local de filtradas y alertas automaticas
 
 ## Requisitos
 
@@ -40,6 +41,11 @@ Variables clave:
 - `ENCRYPTION_LAYERS`: entre 3 y 10.
 - `VITE_API_BASE`: debe coincidir con `API_NAMESPACE`.
 - `APP_BASE_URL`: URL publica frontend para enlaces QR.
+- `HIBP_ENABLED`: habilita chequeo con HaveIBeenPwned Passwords API.
+- `HIBP_TIMEOUT_MS`: timeout de consulta HIBP en ms.
+- `LEAKED_PASSWORDS_FILE`: archivo local de passwords filtradas.
+- `BREACH_AUTO_SCAN_ON_LIST`: refresca brechas automaticamente al consultar credenciales.
+- `BREACH_STATUS_TTL_HOURS`: antiguedad maxima del estado de brecha antes de revalidar.
 
 ## Desarrollo
 
@@ -93,6 +99,8 @@ Prefix: `/api/v1/<API_NAMESPACE>`
 - `GET /audit`
 - `POST /honey/generate`
 - `POST /honey/trigger`
+- `POST /breach/check/:id`
+- `POST /breach/scan`
 
 Endpoint publico de vida:
 - `GET /healthz`

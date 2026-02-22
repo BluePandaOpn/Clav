@@ -7,22 +7,6 @@ function inProduction() {
   return process.env.NODE_ENV === "production";
 }
 
-function requireEnv(name) {
-  const value = process.env[name];
-  if (!value || !value.trim()) {
-    throw new Error(`Missing required env var: ${name}.`);
-  }
-  return value.trim();
-}
-
-function requireMinLength(name, min) {
-  const value = requireEnv(name);
-  if (value.length < min) {
-    throw new Error(`${name} must have at least ${min} characters.`);
-  }
-  return value;
-}
-
 function getApiNamespace() {
   const raw = process.env.API_NAMESPACE?.trim();
   if (raw && raw.length >= 24) return raw;
@@ -55,6 +39,12 @@ if (!Number.isInteger(encryptionLayers) || encryptionLayers < 3 || encryptionLay
 const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
 const port = Number(process.env.PORT || 4000);
 const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:5173";
+const hibpEnabled = String(process.env.HIBP_ENABLED || "true").toLowerCase() !== "false";
+const hibpTimeoutMs = Number(process.env.HIBP_TIMEOUT_MS || 4500);
+const hibpRangeBaseUrl = process.env.HIBP_RANGE_BASE_URL || "https://api.pwnedpasswords.com/range";
+const leakedPasswordsFile = process.env.LEAKED_PASSWORDS_FILE || "server/data/leaked-passwords.txt";
+const breachAutoScanOnList = String(process.env.BREACH_AUTO_SCAN_ON_LIST || "true").toLowerCase() !== "false";
+const breachStatusTtlHours = Number(process.env.BREACH_STATUS_TTL_HOURS || 24);
 
 export const config = {
   apiNamespace,
@@ -63,5 +53,11 @@ export const config = {
   encryptionLayers,
   corsOrigin,
   port,
-  appBaseUrl
+  appBaseUrl,
+  hibpEnabled,
+  hibpTimeoutMs,
+  hibpRangeBaseUrl,
+  leakedPasswordsFile,
+  breachAutoScanOnList,
+  breachStatusTtlHours
 };

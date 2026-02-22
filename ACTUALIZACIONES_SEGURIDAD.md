@@ -18,6 +18,17 @@ Fecha: 2026-02-22
   - `POST /honey/generate`
   - `POST /honey/trigger`
 
+## 0.1.5 - Deteccion de brechas
+
+- Integracion con HaveIBeenPwned Passwords API por k-anonymity (`/range/{prefix}`).
+- Integracion con base local de passwords filtradas (`server/data/leaked-passwords.txt`).
+- Alertas automaticas al crear/actualizar credenciales comprometidas.
+- Auto-escaneo al listar credenciales (con TTL configurable) para mantener estado de brecha actualizado.
+- Escaneo manual completo de boveda desde `Settings`.
+- Nuevos endpoints:
+  - `POST /breach/check/:id`
+  - `POST /breach/scan`
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 import { decryptWithLayers, encryptWithLayers } from "./multilayer-crypto.js";
 import { signCredentialEntry, verifyCredentialEntry } from "./entry-signature.js";
 import { createHybridSharePackage } from "./hybrid-share.js";
+import { checkPasswordBreach } from "./breach-detection.js";
+import { config } from "./config.js";
 
 const DB_FILE = new URL("./data/vault.json", import.meta.url);
 const DB_FILE_PATH = fileURLToPath(DB_FILE);
@@ -36,6 +38,16 @@ export async function writeStore(data) {
 
 export async function listCredentials(query = "") {
   const db = await readStore();
+  let changed = false;
+
+  if (config.breachAutoScanOnList) {
+    changed = await refreshStaleBreachStatuses(db);
+  }
+
+  if (changed) {
+    await writeStore(db);
+  }
+
   const normalized = db.credentials.map(materializeCredential);
   const q = query.trim().toLowerCase();
   if (!q) return normalized;
@@ -62,6 +74,7 @@ export async function createCredential(payload) {
     isHoney: Boolean(payload.isHoney),
     honeyTag: payload.honeyTag || "",
     honeyLastTriggeredAt: null,
+    breachStatus: payload.breachStatus || null,
     createdAt: now,
     updatedAt: now
   };
@@ -93,6 +106,7 @@ export async function updateCredential(id, payload) {
     isHoney: typeof payload.isHoney === "boolean" ? payload.isHoney : Boolean(existing.isHoney),
     honeyTag: payload.honeyTag ?? existing.honeyTag ?? "",
     honeyLastTriggeredAt: existing.honeyLastTriggeredAt || null,
+    breachStatus: payload.breachStatus ?? existing.breachStatus ?? null,
     passwordEnc,
     updatedAt: new Date().toISOString()
   };
@@ -192,6 +206,111 @@ export async function registerHoneyCredentialAccess(credentialId, action, meta =
 
   await writeStore(db);
   return { log, item: materializeCredential(db.credentials[index]) };
+}
+
+export async function refreshCredentialBreachStatus(credentialId) {
+  const db = await readStore();
+  const index = db.credentials.findIndex((item) => item.id === credentialId);
+  if (index === -1) return null;
+
+  const target = db.credentials[index];
+  let breachStatus;
+  try {
+    const password = decryptWithLayers(target.passwordEnc, target.id);
+    breachStatus = await checkPasswordBreach(password);
+  } catch (error) {
+    breachStatus = {
+      compromised: false,
+      pwnedCount: 0,
+      sources: [],
+      checkedAt: new Date().toISOString(),
+      hibpError: `scan_error:${error.message}`
+    };
+  }
+
+  db.credentials[index] = {
+    ...target,
+    breachStatus
+  };
+  await writeStore(db);
+  return materializeCredential(db.credentials[index]);
+}
+
+export async function scanAllCredentialsForBreaches() {
+  const db = await readStore();
+  const updated = [];
+  let compromised = 0;
+
+  for (let i = 0; i < db.credentials.length; i += 1) {
+    const item = db.credentials[i];
+    let breachStatus;
+    try {
+      const password = decryptWithLayers(item.passwordEnc, item.id);
+      breachStatus = await checkPasswordBreach(password);
+    } catch (error) {
+      breachStatus = {
+        compromised: false,
+        pwnedCount: 0,
+        sources: [],
+        checkedAt: new Date().toISOString(),
+        hibpError: `scan_error:${error.message}`
+      };
+    }
+    db.credentials[i] = {
+      ...item,
+      breachStatus
+    };
+    const materialized = materializeCredential(db.credentials[i]);
+    if (breachStatus.compromised) compromised += 1;
+    updated.push(materialized);
+  }
+
+  await writeStore(db);
+  return {
+    total: updated.length,
+    compromised,
+    items: updated
+  };
+}
+
+async function refreshStaleBreachStatuses(db) {
+  let changed = false;
+  for (let i = 0; i < db.credentials.length; i += 1) {
+    const item = db.credentials[i];
+    if (!needsBreachRefresh(item)) continue;
+
+    const breachStatus = await computeBreachStatusSafe(item);
+    db.credentials[i] = {
+      ...item,
+      breachStatus
+    };
+    changed = true;
+  }
+  return changed;
+}
+
+function needsBreachRefresh(item) {
+  if (!item?.breachStatus?.checkedAt) return true;
+  const checkedAtTs = Date.parse(item.breachStatus.checkedAt);
+  if (Number.isNaN(checkedAtTs)) return true;
+
+  const ttlMs = Math.max(1, Number(config.breachStatusTtlHours || 24)) * 60 * 60 * 1000;
+  return Date.now() - checkedAtTs >= ttlMs;
+}
+
+async function computeBreachStatusSafe(item) {
+  try {
+    const password = decryptWithLayers(item.passwordEnc, item.id);
+    return await checkPasswordBreach(password);
+  } catch (error) {
+    return {
+      compromised: false,
+      pwnedCount: 0,
+      sources: [],
+      checkedAt: new Date().toISOString(),
+      hibpError: `scan_error:${error.message}`
+    };
+  }
 }
 
 export async function listTrustedDevices() {
@@ -359,6 +478,7 @@ function materializeCredential(item) {
     isHoney: Boolean(item.isHoney),
     honeyTag: item.honeyTag || "",
     honeyLastTriggeredAt: item.honeyLastTriggeredAt || null,
+    breachStatus: item.breachStatus || null,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     integrity

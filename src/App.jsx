@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import AppShell from "./components/AppShell.jsx";
 import MasterPasswordGate from "./components/MasterPasswordGate.jsx";
@@ -15,10 +15,22 @@ import { useVaultSecurity } from "./hooks/useVaultSecurity.js";
 export default function App() {
   const location = useLocation();
   const security = useVaultSecurity();
-  const { items, loading, error, addItem, removeItem, clearAll, refresh, generateHoneyPasswords, triggerHoneyAccess } =
-    useCredentials(security);
+  const {
+    items,
+    loading,
+    error,
+    addItem,
+    removeItem,
+    clearAll,
+    refresh,
+    generateHoneyPasswords,
+    triggerHoneyAccess,
+    checkCredentialBreach,
+    scanCredentialBreaches
+  } = useCredentials(security);
   const { toasts, pushToast, removeToast } = useToasts();
   const [generatedPassword, setGeneratedPassword] = useState("");
+  const seenCompromisedRef = useRef(new Set());
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -30,6 +42,22 @@ export default function App() {
     return { total, recent };
   }, [items]);
 
+  useEffect(() => {
+    const seen = seenCompromisedRef.current;
+    for (const item of items) {
+      const compromised = Boolean(item?.breachStatus?.compromised);
+      if (!compromised) continue;
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      pushToast(`ALERTA: password comprometida en ${item.service}`, "error");
+    }
+
+    const currentIds = new Set(items.map((item) => item.id));
+    for (const id of Array.from(seen)) {
+      if (!currentIds.has(id)) seen.delete(id);
+    }
+  }, [items, pushToast]);
+
   const shared = {
     items,
     loading,
@@ -40,6 +68,8 @@ export default function App() {
     refresh,
     generateHoneyPasswords,
     triggerHoneyAccess,
+    checkCredentialBreach,
+    scanCredentialBreaches,
     pushToast,
     generatedPassword,
     setGeneratedPassword,

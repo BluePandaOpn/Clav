@@ -12,6 +12,8 @@ export default function PasswordCard({ item, onDelete, onCopy, onReveal }) {
     }
   };
 
+  const breached = Boolean(item?.breachStatus?.compromised);
+
   return (
     <article className="card">
       <div className="card-head">
@@ -25,6 +27,7 @@ export default function PasswordCard({ item, onDelete, onCopy, onReveal }) {
               <AlertTriangle size={12} /> Honey
             </span>
           ) : null}
+          {breached ? <span className="badge breach-badge">Breached</span> : null}
           <span className="badge">{item.category}</span>
         </div>
       </div>
@@ -37,6 +40,11 @@ export default function PasswordCard({ item, onDelete, onCopy, onReveal }) {
       </div>
 
       {item.notes ? <p className="notes">{item.notes}</p> : null}
+      {breached ? (
+        <p className="notes error-text">
+          Detectada en filtraciones ({item.breachStatus.pwnedCount || 0} coincidencias HIBP).
+        </p>
+      ) : null}
 
       <div className="card-foot">
         <small>Creado: {created}</small>

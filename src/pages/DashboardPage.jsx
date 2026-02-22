@@ -1,5 +1,4 @@
-import React from "react";
-import { KeyRound, Shield, Sparkles } from "lucide-react";
+import { AlertTriangle, KeyRound, Shield, Sparkles } from "lucide-react";
 
 function Stat({ icon: Icon, label, value }) {
   return (
@@ -15,6 +14,7 @@ function Stat({ icon: Icon, label, value }) {
 
 export default function DashboardPage({ items, stats }) {
   const latest = items.slice(0, 5);
+  const compromised = items.filter((item) => item?.breachStatus?.compromised).length;
   return (
     <section>
       <header className="page-head">
@@ -26,6 +26,7 @@ export default function DashboardPage({ items, stats }) {
         <Stat icon={Shield} label="Total guardadas" value={stats.total} />
         <Stat icon={Sparkles} label="Ultimos 7 dias" value={stats.recent} />
         <Stat icon={KeyRound} label="Servicios unicos" value={new Set(items.map((i) => i.service)).size} />
+        <Stat icon={AlertTriangle} label="Comprometidas" value={compromised} />
       </div>
 
       <section className="panel">

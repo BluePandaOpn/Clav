@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Copy, Download, KeyRound, Lock, Shield, Smartphone, Trash, Usb } from "lucide-react";
+import { Copy, Download, KeyRound, Lock, SearchCheck, Shield, Smartphone, Trash, Usb } from "lucide-react";
 import { api } from "../utils/api.js";
 
-export default function SettingsPage({ clearAll, pushToast, items, security, addItem }) {
+export default function SettingsPage({ clearAll, pushToast, items, security, addItem, scanCredentialBreaches }) {
   const [qr, setQr] = useState(null);
   const [qrImage, setQrImage] = useState("");
   const [deviceLabel, setDeviceLabel] = useState("desktop-main");
@@ -17,6 +17,7 @@ export default function SettingsPage({ clearAll, pushToast, items, security, add
   const [yubiKeyLabel, setYubiKeyLabel] = useState("YubiKey");
   const [nfcToken, setNfcToken] = useState("");
   const [hardwareBusy, setHardwareBusy] = useState(false);
+  const [breachBusy, setBreachBusy] = useState(false);
 
   useEffect(() => {
     loadSecurityData();
@@ -236,6 +237,22 @@ export default function SettingsPage({ clearAll, pushToast, items, security, add
     webauthnCredentials: [],
     nfcEnabled: false
   };
+  const compromisedCount = items.filter((item) => item?.breachStatus?.compromised).length;
+
+  const runBreachScan = async () => {
+    setBreachBusy(true);
+    try {
+      const result = await scanCredentialBreaches?.();
+      pushToast(
+        `Scan completado: ${result?.compromised || 0} comprometidas de ${result?.total || items.length}`,
+        result?.compromised ? "error" : "success"
+      );
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setBreachBusy(false);
+    }
+  };
 
   return (
     <section>
@@ -344,6 +361,15 @@ export default function SettingsPage({ clearAll, pushToast, items, security, add
       </div>
 
       <div className="panel settings-grid security-grid">
+        <article className="action-card">
+          <h3>0.1.5 Deteccion de brechas</h3>
+          <p>Integracion con HIBP + base local de passwords filtradas con alertas automaticas.</p>
+          <small className="muted">Comprometidas detectadas: {compromisedCount}</small>
+          <button className="primary-btn" type="button" onClick={runBreachScan} disabled={breachBusy}>
+            <SearchCheck size={16} /> {breachBusy ? "Escaneando..." : "Escanear boveda ahora"}
+          </button>
+        </article>
+
         <article className="action-card">
           <h3>0.1.3 Autenticacion basada en hardware</h3>
           <p>WebAuthn/Passkeys, YubiKey y NFC unlock local experimental.</p>

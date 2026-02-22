@@ -217,7 +217,7 @@ body {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -426,6 +426,11 @@ select:focus {
   gap: 5px;
 }
 
+.breach-badge {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
 .password-row {
   display: flex;
   justify-content: space-between;
@@ -461,6 +466,11 @@ code {
 
 .card-actions {
   display: flex;
+  gap: 6px;
+}
+
+.card-wrap {
+  display: grid;
   gap: 6px;
 }
 

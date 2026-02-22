@@ -87,5 +87,15 @@ export const api = {
       headers: JSON_HEADERS,
       body: JSON.stringify(payload)
     });
+  },
+  async checkCredentialBreach(id) {
+    return request(`${API_BASE}/breach/check/${id}`, {
+      method: "POST"
+    });
+  },
+  async scanCredentialBreaches() {
+    return request(`${API_BASE}/breach/scan`, {
+      method: "POST"
+    });
   }
 };

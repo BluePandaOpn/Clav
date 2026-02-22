@@ -16,7 +16,9 @@ import {
   listCredentials,
   listTrustedDevices,
   readStore,
+  refreshCredentialBreachStatus,
   registerHoneyCredentialAccess,
+  scanAllCredentialsForBreaches,
   upsertDeviceEncryptionKey,
   updateCredential
 } from "./store.js";
@@ -75,13 +77,22 @@ api.post(
   if (!service || !password) {
     return res.status(400).json({ error: "service and password are required" });
   }
-  const item = await createCredential({ service, username, password, category, notes });
+  const created = await createCredential({ service, username, password, category, notes });
+  const item = (await refreshCredentialBreachStatus(created.id)) || created;
   await addAuditLog({
     type: "CREDENTIAL_CREATED",
     detail: service,
     ip: getIp(req),
     userAgent: getUa(req)
   });
+  if (item?.breachStatus?.compromised) {
+    await addAuditLog({
+      type: "PASSWORD_BREACH_DETECTED",
+      detail: `${item.id}:${item.service}:count=${item.breachStatus.pwnedCount}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+  }
   return res.status(201).json({ item });
   })
 );
@@ -89,9 +100,18 @@ api.post(
 api.put(
   "/credentials/:id",
   asyncHandler(async (req, res) => {
-  const updated = await updateCredential(req.params.id, req.body || {});
+  const updatedBase = await updateCredential(req.params.id, req.body || {});
+  const updated = updatedBase ? await refreshCredentialBreachStatus(updatedBase.id) : null;
   if (!updated) {
     return res.status(404).json({ error: "credential not found" });
+  }
+  if (updated?.breachStatus?.compromised) {
+    await addAuditLog({
+      type: "PASSWORD_BREACH_DETECTED",
+      detail: `${updated.id}:${updated.service}:count=${updated.breachStatus.pwnedCount}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
   }
   return res.json({ item: updated });
   })
@@ -277,6 +297,47 @@ api.post(
       return res.status(404).json({ error: "honey credential not found" });
     }
     return res.status(201).json(data);
+  })
+);
+
+api.post(
+  "/breach/check/:id",
+  asyncHandler(async (req, res) => {
+    const item = await refreshCredentialBreachStatus(String(req.params.id));
+    if (!item) {
+      return res.status(404).json({ error: "credential not found" });
+    }
+    if (item?.breachStatus?.compromised) {
+      await addAuditLog({
+        type: "PASSWORD_BREACH_DETECTED",
+        detail: `${item.id}:${item.service}:count=${item.breachStatus.pwnedCount}`,
+        ip: getIp(req),
+        userAgent: getUa(req)
+      });
+    }
+    return res.json({ item });
+  })
+);
+
+api.post(
+  "/breach/scan",
+  asyncHandler(async (req, res) => {
+    const result = await scanAllCredentialsForBreaches();
+    await addAuditLog({
+      type: "PASSWORD_BREACH_SCAN_COMPLETED",
+      detail: `total=${result.total};compromised=${result.compromised}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    if (result.compromised > 0) {
+      await addAuditLog({
+        type: "PASSWORD_BREACH_DETECTED",
+        detail: `bulk_scan_compromised=${result.compromised}`,
+        ip: getIp(req),
+        userAgent: getUa(req)
+      });
+    }
+    return res.json(result);
   })
 );
 

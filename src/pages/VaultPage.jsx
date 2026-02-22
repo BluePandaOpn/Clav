@@ -21,7 +21,8 @@ export default function VaultPage({
   pushToast,
   generatedPassword,
   generateHoneyPasswords,
-  triggerHoneyAccess
+  triggerHoneyAccess,
+  checkCredentialBreach
 }) {
   const [form, setForm] = useState(initialForm);
   const [search, setSearch] = useLocalStorage("vault_search", "");
@@ -52,9 +53,13 @@ export default function VaultPage({
       return;
     }
     try {
-      await addItem(form);
+      const created = await addItem(form);
       setForm(initialForm);
-      pushToast("Credencial guardada", "success");
+      if (created?.breachStatus?.compromised) {
+        pushToast("ALERTA: credencial guardada pero expuesta en filtraciones", "error");
+      } else {
+        pushToast("Credencial guardada", "success");
+      }
     } catch (error) {
       pushToast(error.message, "error");
     }
@@ -69,6 +74,10 @@ export default function VaultPage({
         // No-op to avoid blocking UI.
       }
       pushToast("ALERTA: Honey password accedido (copy)", "error");
+      return;
+    }
+    if (item.breachStatus?.compromised) {
+      pushToast("ALERTA: esta password aparece en filtraciones conocidas", "error");
       return;
     }
     pushToast("Password copiado", "success");
@@ -88,6 +97,19 @@ export default function VaultPage({
     try {
       await removeItem(id);
       pushToast("Credencial eliminada", "info");
+    } catch (error) {
+      pushToast(error.message, "error");
+    }
+  };
+
+  const checkBreachNow = async (item) => {
+    try {
+      const updated = await checkCredentialBreach?.(item.id);
+      if (updated?.breachStatus?.compromised) {
+        pushToast(`Brecha detectada en ${updated.service}`, "error");
+      } else {
+        pushToast(`Sin brecha detectada en ${item.service}`, "success");
+      }
     } catch (error) {
       pushToast(error.message, "error");
     }
@@ -179,7 +201,14 @@ export default function VaultPage({
           {!loading && filtered.length === 0 ? <p className="muted">No hay resultados.</p> : null}
           <div className="card-list">
             {filtered.map((item) => (
-              <PasswordCard key={item.id} item={item} onDelete={onDelete} onCopy={onCopy} onReveal={onReveal} />
+              <div key={item.id} className="card-wrap">
+                <PasswordCard item={item} onDelete={onDelete} onCopy={onCopy} onReveal={onReveal} />
+                <div className="inline-actions">
+                  <button className="icon-btn" type="button" onClick={() => checkBreachNow(item)}>
+                    Verificar brecha
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </section>

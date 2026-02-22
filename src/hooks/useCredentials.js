@@ -82,5 +82,38 @@ export function useCredentials(security) {
     return data;
   }, [saveEncryptedVault]);
 
-  return { items, loading, error, refresh, addItem, removeItem, clearAll, generateHoneyPasswords, triggerHoneyAccess };
+  const checkCredentialBreach = useCallback(async (id) => {
+    const data = await api.checkCredentialBreach(id);
+    if (data?.item) {
+      setItems((prev) => {
+        const next = prev.map((item) => (item.id === data.item.id ? data.item : item));
+        saveEncryptedVault?.(next);
+        return next;
+      });
+    }
+    return data?.item || null;
+  }, [saveEncryptedVault]);
+
+  const scanCredentialBreaches = useCallback(async () => {
+    const data = await api.scanCredentialBreaches();
+    if (Array.isArray(data?.items)) {
+      setItems(data.items);
+      saveEncryptedVault?.(data.items);
+    }
+    return data;
+  }, [saveEncryptedVault]);
+
+  return {
+    items,
+    loading,
+    error,
+    refresh,
+    addItem,
+    removeItem,
+    clearAll,
+    generateHoneyPasswords,
+    triggerHoneyAccess,
+    checkCredentialBreach,
+    scanCredentialBreaches
+  };
 }
