@@ -8,6 +8,8 @@ Gestor de passwords profesional con:
 - Cache local cifrada con password maestra (AES-GCM + PBKDF2)
 - Preferencias persistentes con `useLocalStorage`
 - Cifrado en servidor por multiples capas AES-256-GCM (hasta 10 capas)
+- Doble cifrado hibrido para comparticion entre dispositivos (RSA-OAEP + AES-GCM)
+- Firma digital por entrada (Ed25519) para deteccion de manipulacion
 - Namespace de rutas API privado por `.env`
 - Hardening base: `helmet`, `express-rate-limit`, limites de payload
 - QR unlock de un solo uso con expiracion corta y firma HMAC
@@ -83,6 +85,9 @@ Prefix: `/api/v1/<API_NAMESPACE>`
 - `GET /qr/challenge/:id`
 - `POST /qr/approve`
 - `GET /devices`
+- `POST /devices/register-key`
+- `GET /devices/share-targets`
+- `POST /share/credential`
 - `GET /audit`
 
 Endpoint publico de vida:
