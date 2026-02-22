@@ -575,6 +575,60 @@ code {
   border-bottom: 0;
 }
 
+.audit-panel {
+  margin-top: 12px;
+}
+
+.audit-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.audit-bar-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--subtle);
+}
+
+.audit-bar-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.audit-track {
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.audit-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.audit-fill.weak {
+  background: var(--weak);
+}
+
+.audit-fill.warning {
+  background: var(--warning);
+}
+
+.audit-fill.medium {
+  background: var(--medium);
+}
+
+.audit-details {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .strength-wrap {
   display: flex;
   align-items: center;
@@ -705,7 +759,8 @@ button:disabled {
   .vault-grid,
   .stats-grid,
   .settings-grid,
-  .options-grid {
+  .options-grid,
+  .audit-details {
     grid-template-columns: 1fr;
   }
 

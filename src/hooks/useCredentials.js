@@ -103,6 +103,10 @@ export function useCredentials(security) {
     return data;
   }, [saveEncryptedVault]);
 
+  const getCredentialHistory = useCallback(async (id) => {
+    return api.getCredentialHistory(id);
+  }, []);
+
   return {
     items,
     loading,
@@ -114,6 +118,7 @@ export function useCredentials(security) {
     generateHoneyPasswords,
     triggerHoneyAccess,
     checkCredentialBreach,
-    scanCredentialBreaches
+    scanCredentialBreaches,
+    getCredentialHistory
   };
 }

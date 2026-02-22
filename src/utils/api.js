@@ -27,6 +27,9 @@ export const api = {
   async clearCredentials() {
     return request(`${API_BASE}/credentials`, { method: "DELETE" });
   },
+  async getCredentialHistory(id) {
+    return request(`${API_BASE}/credentials/${id}/history`);
+  },
   async generatePassword(payload) {
     return request(`${API_BASE}/generate`, {
       method: "POST",

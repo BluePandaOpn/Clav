@@ -11,6 +11,7 @@ import {
   createCredential,
   deleteCredential,
   generateHoneyCredentials,
+  getCredentialHistory,
   listShareTargets,
   listAuditLogs,
   listCredentials,
@@ -114,6 +115,17 @@ api.put(
     });
   }
   return res.json({ item: updated });
+  })
+);
+
+api.get(
+  "/credentials/:id/history",
+  asyncHandler(async (req, res) => {
+    const history = await getCredentialHistory(String(req.params.id));
+    if (!history) {
+      return res.status(404).json({ error: "credential not found" });
+    }
+    return res.json(history);
   })
 );
 

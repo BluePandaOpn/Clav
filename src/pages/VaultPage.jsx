@@ -24,12 +24,15 @@ export default function VaultPage({
   generateHoneyPasswords,
   triggerHoneyAccess,
   checkCredentialBreach,
+  getCredentialHistory,
   travelModeActive,
   presentationModeEnabled
 }) {
   const [form, setForm] = useState(initialForm);
   const [search, setSearch] = useLocalStorage("vault_search", "");
   const [categoryFilter, setCategoryFilter] = useLocalStorage("vault_category_filter", "All");
+  const [historyById, setHistoryById] = useState({});
+  const [historyLoading, setHistoryLoading] = useState({});
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -131,6 +134,27 @@ export default function VaultPage({
       }
     } catch (error) {
       pushToast(error.message, "error");
+    }
+  };
+
+  const toggleHistory = async (item) => {
+    if (historyById[item.id]) {
+      setHistoryById((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+      return;
+    }
+
+    setHistoryLoading((prev) => ({ ...prev, [item.id]: true }));
+    try {
+      const history = await getCredentialHistory?.(item.id);
+      setHistoryById((prev) => ({ ...prev, [item.id]: history }));
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setHistoryLoading((prev) => ({ ...prev, [item.id]: false }));
     }
   };
 
@@ -241,7 +265,37 @@ export default function VaultPage({
                   <button className="icon-btn" type="button" onClick={() => checkBreachNow(item)}>
                     Verificar brecha
                   </button>
+                  <button className="icon-btn" type="button" onClick={() => toggleHistory(item)}>
+                    {historyLoading[item.id] ? "Cargando..." : historyById[item.id] ? "Ocultar historial" : "Ver historial"}
+                  </button>
                 </div>
+                {historyById[item.id] ? (
+                  <article className="panel">
+                    <h4>Historial de versiones</h4>
+                    <p className="muted">Creada: {new Date(historyById[item.id].createdAt).toLocaleString("es-ES")}</p>
+                    <p className="muted">Version actual: v{historyById[item.id].currentVersion}</p>
+                    <p className="muted">Cambios registrados:</p>
+                    <ul className="security-list">
+                      {(historyById[item.id].changes || []).slice(0, 8).map((entry, idx) => (
+                        <li key={`${item.id}-change-${idx}`}>
+                          <strong>{entry.type}</strong>
+                          <small>{new Date(entry.at).toLocaleString("es-ES")}</small>
+                          <small>{Array.isArray(entry.fields) ? entry.fields.join(", ") : ""}</small>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="muted">Versiones anteriores:</p>
+                    <ul className="security-list">
+                      {(historyById[item.id].previousVersions || []).slice(0, 8).map((entry, idx) => (
+                        <li key={`${item.id}-version-${idx}`}>
+                          <strong>v{entry.version}</strong>
+                          <small>{new Date(entry.changedAt).toLocaleString("es-ES")}</small>
+                          <code>{presentationModeEnabled ? "[PRESENTATION_MODE]" : entry.password || "[NO_DATA]"}</code>
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                ) : null}
               </div>
             ))}
           </div>

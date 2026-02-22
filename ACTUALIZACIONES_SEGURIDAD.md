@@ -65,6 +65,24 @@ Fecha: 2026-02-22
 - Bloquea acciones de copy/reveal de credenciales en `Vault`.
 - Oculta username en `Dashboard` y password generado en `Generator`.
 
+## 2.4 - Historial de versiones
+
+- Cada credencial guarda:
+  - Fecha de creacion.
+  - Cambios (campos modificados y timestamp).
+  - Versiones anteriores de password.
+- Nuevo endpoint:
+  - `GET /credentials/:id/history`
+- En `Vault` se agrega boton "Ver historial" por credencial.
+
+## 2.5 - Auditoria visual
+
+- Se agrega panel visual en `Dashboard` con graficos para:
+  - Contrasenas debiles.
+  - Contrasenas duplicadas.
+  - Contrasenas antiguas (+180 dias).
+- Incluye detalle de grupos duplicados y top credenciales antiguas.
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

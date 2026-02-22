@@ -10,6 +10,7 @@ import { config } from "./config.js";
 
 const DB_FILE = new URL("./data/vault.json", import.meta.url);
 const DB_FILE_PATH = fileURLToPath(DB_FILE);
+const MAX_HISTORY_ENTRIES = 50;
 
 async function ensureStore() {
   const dir = dirname(DB_FILE_PATH);
@@ -64,17 +65,27 @@ export async function createCredential(payload) {
   const db = await readStore();
   const now = new Date().toISOString();
   const id = randomUUID();
+  const passwordEnc = encryptWithLayers(payload.password, id);
   const unsignedItem = {
     id,
     service: payload.service,
     username: payload.username || "",
-    passwordEnc: encryptWithLayers(payload.password, id),
+    passwordEnc,
     category: payload.category || "General",
     notes: payload.notes || "",
     isSensitive: Boolean(payload.isSensitive),
     isHoney: Boolean(payload.isHoney),
     honeyTag: payload.honeyTag || "",
     honeyLastTriggeredAt: null,
+    passwordVersion: 1,
+    passwordHistory: [],
+    changeLog: [
+      {
+        at: now,
+        type: "CREATED",
+        fields: ["service", "username", "password", "category", "notes", "isSensitive"]
+      }
+    ],
     breachStatus: payload.breachStatus || null,
     createdAt: now,
     updatedAt: now
@@ -93,10 +104,36 @@ export async function updateCredential(id, payload) {
   const index = db.credentials.findIndex((item) => item.id === id);
   if (index === -1) return null;
   const existing = db.credentials[index];
-  const passwordEnc =
-    typeof payload.password === "string" && payload.password.length
-      ? encryptWithLayers(payload.password, id)
-      : existing.passwordEnc;
+  const hasPasswordChange = typeof payload.password === "string" && payload.password.length > 0;
+  const passwordEnc = hasPasswordChange ? encryptWithLayers(payload.password, id) : existing.passwordEnc;
+  const fieldsChanged = getChangedFields(existing, payload, hasPasswordChange);
+  const now = new Date().toISOString();
+  const baseVersion = Number(existing.passwordVersion || 1);
+  const nextVersion = hasPasswordChange ? baseVersion + 1 : baseVersion;
+  const nextHistory = hasPasswordChange
+    ? [
+        {
+          version: baseVersion,
+          passwordEnc: existing.passwordEnc,
+          changedAt: now
+        },
+        ...(Array.isArray(existing.passwordHistory) ? existing.passwordHistory : [])
+      ].slice(0, MAX_HISTORY_ENTRIES)
+    : Array.isArray(existing.passwordHistory)
+      ? existing.passwordHistory
+      : [];
+  const nextChangeLog = fieldsChanged.length
+    ? [
+        {
+          at: now,
+          type: "UPDATED",
+          fields: fieldsChanged
+        },
+        ...(Array.isArray(existing.changeLog) ? existing.changeLog : [])
+      ].slice(0, MAX_HISTORY_ENTRIES)
+    : Array.isArray(existing.changeLog)
+      ? existing.changeLog
+      : [];
 
   const updatedItem = {
     ...existing,
@@ -109,9 +146,12 @@ export async function updateCredential(id, payload) {
     isHoney: typeof payload.isHoney === "boolean" ? payload.isHoney : Boolean(existing.isHoney),
     honeyTag: payload.honeyTag ?? existing.honeyTag ?? "",
     honeyLastTriggeredAt: existing.honeyLastTriggeredAt || null,
+    passwordVersion: nextVersion,
+    passwordHistory: nextHistory,
+    changeLog: nextChangeLog,
     breachStatus: payload.breachStatus ?? existing.breachStatus ?? null,
     passwordEnc,
-    updatedAt: new Date().toISOString()
+    updatedAt: now
   };
   db.credentials[index] = {
     ...updatedItem,
@@ -119,6 +159,49 @@ export async function updateCredential(id, payload) {
   };
   await writeStore(db);
   return materializeCredential(db.credentials[index]);
+}
+
+export async function getCredentialHistory(credentialId) {
+  const db = await readStore();
+  const item = db.credentials.find((entry) => entry.id === credentialId);
+  if (!item) return null;
+
+  const materialized = materializeCredential(item);
+  if (materialized.integrity === "tampered") {
+    return {
+      credentialId: item.id,
+      integrity: materialized.integrity,
+      createdAt: item.createdAt,
+      currentVersion: Number(item.passwordVersion || 1),
+      changes: Array.isArray(item.changeLog) ? item.changeLog : [],
+      previousVersions: []
+    };
+  }
+
+  const previousVersions = Array.isArray(item.passwordHistory)
+    ? item.passwordHistory.map((entry) => {
+        let password = "[DECRYPTION_ERROR]";
+        try {
+          password = decryptWithLayers(entry.passwordEnc, item.id);
+        } catch {
+          // Keep placeholder for corrupted history entries.
+        }
+        return {
+          version: Number(entry.version || 0),
+          changedAt: entry.changedAt || item.updatedAt,
+          password
+        };
+      })
+    : [];
+
+  return {
+    credentialId: item.id,
+    integrity: materialized.integrity,
+    createdAt: item.createdAt,
+    currentVersion: Number(item.passwordVersion || 1),
+    changes: Array.isArray(item.changeLog) ? item.changeLog : [],
+    previousVersions
+  };
 }
 
 export async function deleteCredential(id) {
@@ -164,6 +247,15 @@ export async function generateHoneyCredentials(count = 3) {
       isHoney: true,
       honeyTag: "v0.1.4",
       honeyLastTriggeredAt: null,
+      passwordVersion: 1,
+      passwordHistory: [],
+      changeLog: [
+        {
+          at: now,
+          type: "CREATED",
+          fields: ["service", "username", "password", "category", "notes", "isSensitive", "isHoney"]
+        }
+      ],
       createdAt: now,
       updatedAt: now
     };
@@ -483,6 +575,8 @@ function materializeCredential(item) {
     isHoney: Boolean(item.isHoney),
     honeyTag: item.honeyTag || "",
     honeyLastTriggeredAt: item.honeyLastTriggeredAt || null,
+    passwordVersion: Number(item.passwordVersion || 1),
+    previousVersionCount: Array.isArray(item.passwordHistory) ? item.passwordHistory.length : 0,
     breachStatus: item.breachStatus || null,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -505,4 +599,17 @@ function normalizeStore(input) {
   const trustedDevices = Array.isArray(db.trustedDevices) ? db.trustedDevices : [];
   const auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
   return { credentials, trustedDevices, auditLogs };
+}
+
+function getChangedFields(existing, payload, hasPasswordChange) {
+  const changed = [];
+  if (hasPasswordChange) changed.push("password");
+  if (typeof payload.service === "string" && payload.service !== existing.service) changed.push("service");
+  if (typeof payload.username === "string" && payload.username !== existing.username) changed.push("username");
+  if (typeof payload.category === "string" && payload.category !== existing.category) changed.push("category");
+  if (typeof payload.notes === "string" && payload.notes !== existing.notes) changed.push("notes");
+  if (typeof payload.isSensitive === "boolean" && payload.isSensitive !== Boolean(existing.isSensitive)) {
+    changed.push("isSensitive");
+  }
+  return changed;
 }

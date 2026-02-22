@@ -21,6 +21,8 @@ Gestor de passwords profesional con:
 - Autocompletado estilo Bitwarden (2.1): extension para Chrome/Firefox/Edge con llenado de login
 - Modo viaje (0.2.2): oculta temporalmente credenciales sensibles durante desplazamientos
 - Modo presentacion (0.2.3): oculta datos sensibles al compartir pantalla
+- Historial de versiones (2.4): fecha de creacion, cambios y versiones anteriores por credencial
+- Auditoria visual (2.5): graficos de contrasenas debiles, duplicadas y antiguas
 
 ## Requisitos
 
@@ -106,6 +108,7 @@ Prefix: `/api/v1/<API_NAMESPACE>`
 - `GET /health`
 - `GET /credentials`
 - `POST /credentials`
+- `GET /credentials/:id/history`
 - `PUT /credentials/:id`
 - `DELETE /credentials/:id`
 - `DELETE /credentials`

@@ -29,7 +29,8 @@ export default function App() {
     generateHoneyPasswords,
     triggerHoneyAccess,
     checkCredentialBreach,
-    scanCredentialBreaches
+    scanCredentialBreaches,
+    getCredentialHistory
   } = useCredentials(security);
   const { toasts, pushToast, removeToast } = useToasts();
   const [generatedPassword, setGeneratedPassword] = useState("");
@@ -147,6 +148,7 @@ export default function App() {
     triggerHoneyAccess,
     checkCredentialBreach,
     scanCredentialBreaches,
+    getCredentialHistory,
     pushToast,
     generatedPassword,
     setGeneratedPassword,
