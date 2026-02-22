@@ -1,20 +1,47 @@
 import React from "react";
-import { Command, KeyRound, LayoutDashboard, LockKeyhole, Settings } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import {
+  Command,
+  LayoutDashboard,
+  LockKeyhole,
+  WandSparkles,
+  ShieldAlert,
+  Laptop,
+  Settings,
+  UserRound,
+  Plus,
+  Search
+} from "lucide-react";
+import { NavLink, useNavigate } from "react-router-dom";
 
 const links = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/vault", label: "Vault", icon: LockKeyhole },
-  { to: "/generator", label: "Generator", icon: KeyRound },
-  { to: "/settings", label: "Settings", icon: Settings }
+  { to: "/generator", label: "Generador", icon: WandSparkles },
+  { to: "/audit", label: "Auditoria", icon: ShieldAlert },
+  { to: "/devices", label: "Dispositivos", icon: Laptop },
+  { to: "/settings", label: "Configuracion", icon: Settings },
+  { to: "/account", label: "Cuenta", icon: UserRound }
 ];
 
-export default function AppShell({ children }) {
+export default function AppShell({ children, offlineMode = false, pendingSyncCount = 0 }) {
   const appName = import.meta.env.VITE_APP_NAME || "Password Manager";
+  const navigate = useNavigate();
+
+  const submitGlobalSearch = (event) => {
+    event.preventDefault();
+    const input = event.currentTarget.elements.global_search;
+    const value = String(input?.value || "").trim();
+    localStorage.setItem("vault_search", value);
+    navigate("/vault");
+  };
+
+  const goToAdd = () => {
+    navigate("/vault");
+  };
 
   return (
     <div className="app-root">
-      <aside className="sidebar">
+      <aside className="sidebar fixed-sidebar">
         <div className="brand">
           <div className="brand-logo">
             <Command size={20} />
@@ -44,7 +71,24 @@ export default function AppShell({ children }) {
           })}
         </nav>
       </aside>
-      <main className="content">{children}</main>
+      <main className="content app-content">
+        <header className="topbar">
+          <form className="topbar-search" onSubmit={submitGlobalSearch}>
+            <Search size={15} />
+            <input name="global_search" placeholder="Buscar en el vault..." />
+          </form>
+          <div className="topbar-actions">
+            <button className="primary-btn" type="button" onClick={goToAdd}>
+              <Plus size={14} /> Anadir
+            </button>
+            <span className={`sync-state ${offlineMode ? "offline" : "online"}`}>
+              {offlineMode ? `Offline (${pendingSyncCount})` : pendingSyncCount > 0 ? `Pendiente: ${pendingSyncCount}` : "Sincronizado"}
+            </span>
+            <div className="avatar-chip">US</div>
+          </div>
+        </header>
+        {children}
+      </main>
     </div>
   );
 }

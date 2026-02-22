@@ -8,6 +8,9 @@ import VaultPage from "./pages/VaultPage.jsx";
 import GeneratorPage from "./pages/GeneratorPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import UnlockQrPage from "./pages/UnlockQrPage.jsx";
+import AuditPage from "./pages/AuditPage.jsx";
+import DevicesPage from "./pages/DevicesPage.jsx";
+import AccountPage from "./pages/AccountPage.jsx";
 import { useCredentials } from "./hooks/useCredentials.js";
 import { useAutoLock } from "./hooks/useAutoLock.js";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
@@ -211,13 +214,16 @@ export default function App() {
   }
 
   return (
-    <AppShell>
+    <AppShell offlineMode={offlineMode} pendingSyncCount={pendingSyncCount}>
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage stats={stats} {...shared} />} />
         <Route path="/vault" element={<VaultPage {...shared} />} />
         <Route path="/generator" element={<GeneratorPage {...shared} />} />
+        <Route path="/audit" element={<AuditPage {...shared} />} />
+        <Route path="/devices" element={<DevicesPage {...shared} />} />
         <Route path="/settings" element={<SettingsPage {...shared} />} />
+        <Route path="/account" element={<AccountPage {...shared} />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
       <ToastStack items={toasts} onClose={removeToast} />
