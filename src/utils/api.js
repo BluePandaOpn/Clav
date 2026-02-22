@@ -93,6 +93,13 @@ export const api = {
       body: JSON.stringify(payload)
     });
   },
+  async updateCredential(id, payload) {
+    return request(`${API_BASE}/credentials/${id}`, {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
   async deleteCredential(id) {
     return request(`${API_BASE}/credentials/${id}`, { method: "DELETE" });
   },

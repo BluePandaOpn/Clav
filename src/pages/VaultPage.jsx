@@ -1,8 +1,28 @@
-import React, { useMemo, useState } from "react";
-import { Plus, Search, ShieldAlert } from "lucide-react";
-import PasswordCard from "../components/PasswordCard.jsx";
-import PasswordStrength from "../components/PasswordStrength.jsx";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  CreditCard,
+  FileText,
+  KeyRound,
+  LockKeyhole,
+  Plus,
+  Share2,
+  Star,
+  Table2,
+  LayoutGrid
+} from "lucide-react";
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
+import { getStrengthLabel } from "../utils/password.js";
+import { api } from "../utils/api.js";
+
+const CATEGORY_DEFS = [
+  { key: "ALL", label: "Todo" },
+  { key: "PASSWORDS", label: "Contrasenas" },
+  { key: "CARDS", label: "Tarjetas" },
+  { key: "SECURE_NOTES", label: "Notas seguras" },
+  { key: "API_KEYS", label: "API Keys" },
+  { key: "FAVORITES", label: "Favoritos" },
+  { key: "SHARED", label: "Compartidos" }
+];
 
 const initialForm = {
   service: "",
@@ -21,176 +41,190 @@ export default function VaultPage({
   removeItem,
   pushToast,
   generatedPassword,
-  generateHoneyPasswords,
-  triggerHoneyAccess,
-  checkCredentialBreach,
   getCredentialHistory,
-  updateRotationPolicy,
-  rotateCredentialNow,
   travelModeActive,
   presentationModeEnabled
 }) {
-  const [form, setForm] = useState(initialForm);
   const [search, setSearch] = useLocalStorage("vault_search", "");
-  const [categoryFilter, setCategoryFilter] = useLocalStorage("vault_category_filter", "All");
-  const [historyById, setHistoryById] = useState({});
-  const [historyLoading, setHistoryLoading] = useState({});
+  const [activeCategory, setActiveCategory] = useLocalStorage("vault_category_v062", "ALL");
+  const [viewMode, setViewMode] = useLocalStorage("vault_view_mode_v062", "cards");
+  const [favoriteIds, setFavoriteIds] = useLocalStorage("vault_favorites_v062", []);
+  const [sharedIds, setSharedIds] = useState(new Set());
+  const [shareTargets, setShareTargets] = useState([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [history, setHistory] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState(initialForm);
+
+  useEffect(() => {
+    const loadSharedData = async () => {
+      try {
+        const [vaults, targets] = await Promise.all([api.listSharedVaults("owner"), api.listShareTargets()]);
+        const ids = new Set();
+        for (const vault of vaults.items || []) {
+          for (const item of vault.items || []) {
+            if (item?.id) ids.add(item.id);
+          }
+        }
+        setSharedIds(ids);
+        setShareTargets(targets.items || []);
+      } catch {
+        // Optional for vault UX.
+      }
+    };
+    loadSharedData();
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return items.filter((item) => {
-      const textMatch =
-        !q ||
-        item.service.toLowerCase().includes(q) ||
-        item.username.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q);
-      const categoryMatch = categoryFilter === "All" || item.category === categoryFilter;
-      return textMatch && categoryMatch;
+    return (items || []).filter((item) => {
+      if (q) {
+        const tags = extractTags(item).join(" ").toLowerCase();
+        const match =
+          item.service.toLowerCase().includes(q) ||
+          item.username.toLowerCase().includes(q) ||
+          item.notes.toLowerCase().includes(q) ||
+          tags.includes(q);
+        if (!match) return false;
+      }
+      return matchesCategory(item, activeCategory, new Set(favoriteIds), sharedIds);
     });
-  }, [items, search, categoryFilter]);
+  }, [items, search, activeCategory, favoriteIds, sharedIds]);
 
-  const categories = useMemo(() => {
-    const set = new Set(items.map((item) => item.category));
-    return ["All", ...Array.from(set).sort()];
-  }, [items]);
+  useEffect(() => {
+    if (filtered.length === 0) {
+      setSelectedId("");
+      return;
+    }
+    if (!selectedId || !filtered.some((item) => item.id === selectedId)) {
+      setSelectedId(filtered[0].id);
+    }
+  }, [filtered, selectedId]);
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.service || !form.password) {
+  const selectedItem = useMemo(() => filtered.find((item) => item.id === selectedId) || null, [filtered, selectedId]);
+
+  const counts = useMemo(() => {
+    const favorites = new Set(favoriteIds);
+    const map = {};
+    for (const def of CATEGORY_DEFS) {
+      map[def.key] = (items || []).filter((item) => matchesCategory(item, def.key, favorites, sharedIds)).length;
+    }
+    return map;
+  }, [items, favoriteIds, sharedIds]);
+
+  useEffect(() => {
+    if (!selectedItem) return;
+    setEditing(false);
+    setShowPassword(false);
+    setHistory(null);
+    setEditForm({
+      service: selectedItem.service,
+      username: selectedItem.username,
+      password: selectedItem.password,
+      category: selectedItem.category,
+      notes: selectedItem.notes,
+      isSensitive: Boolean(selectedItem.isSensitive)
+    });
+  }, [selectedItem?.id]);
+
+  const addNewEntry = async (event) => {
+    event.preventDefault();
+    if (!addForm.service || !addForm.password) {
       pushToast("Servicio y password son obligatorios", "error");
       return;
     }
     try {
-      const created = await addItem(form);
-      setForm(initialForm);
-      if (created?.breachStatus?.compromised) {
-        pushToast("ALERTA: credencial guardada pero expuesta en filtraciones", "error");
-      } else {
-        pushToast("Credencial guardada", "success");
-      }
-    } catch (error) {
-      pushToast(error.message, "error");
+      const created = await addItem(addForm);
+      setAddForm(initialForm);
+      setShowAddForm(false);
+      setSelectedId(created?.id || "");
+      pushToast("Entrada agregada", "success");
+    } catch (e) {
+      pushToast(e.message, "error");
     }
   };
 
-  const onCopy = async (item) => {
+  const saveEdit = async () => {
+    if (!selectedItem) return;
+    try {
+      const payload = {
+        service: editForm.service,
+        username: editForm.username,
+        password: editForm.password,
+        category: editForm.category,
+        notes: editForm.notes,
+        isSensitive: Boolean(editForm.isSensitive)
+      };
+      await api.updateCredential(selectedItem.id, payload);
+      setEditing(false);
+      pushToast("Entrada actualizada", "success");
+    } catch (e) {
+      pushToast(e.message, "error");
+    }
+  };
+
+  const copyUsername = async () => {
+    if (!selectedItem) return;
     if (presentationModeEnabled) {
       pushToast("Modo presentacion: copy bloqueado", "info");
       return;
     }
-    if (travelModeActive && item.isSensitive) {
-      pushToast("Modo viaje: copy bloqueado para credenciales sensibles", "info");
-      return;
-    }
-    await navigator.clipboard.writeText(item.password);
-    if (item.isHoney) {
-      try {
-        await triggerHoneyAccess?.(item.id, "copy");
-      } catch {
-        // No-op to avoid blocking UI.
-      }
-      pushToast("ALERTA: Honey password accedido (copy)", "error");
-      return;
-    }
-    if (item.breachStatus?.compromised) {
-      pushToast("ALERTA: esta password aparece en filtraciones conocidas", "error");
-      return;
-    }
-    pushToast("Password copiado", "success");
+    await navigator.clipboard.writeText(selectedItem.username || "");
+    pushToast("Usuario copiado", "success");
   };
 
-  const onReveal = async (item) => {
+  const copyPassword = async () => {
+    if (!selectedItem) return;
     if (presentationModeEnabled) {
-      pushToast("Modo presentacion: reveal bloqueado", "info");
+      pushToast("Modo presentacion: copy bloqueado", "info");
       return;
     }
-    if (travelModeActive && item.isSensitive) {
-      pushToast("Modo viaje: reveal bloqueado para credenciales sensibles", "info");
+    if (travelModeActive && selectedItem.isSensitive) {
+      pushToast("Modo viaje: copy bloqueado para entradas sensibles", "info");
       return;
     }
-    if (!item.isHoney) return;
-    try {
-      await triggerHoneyAccess?.(item.id, "reveal");
-    } catch {
-      // No-op to avoid blocking UI.
-    }
-    pushToast("ALERTA: Honey password accedido (reveal)", "error");
+    await navigator.clipboard.writeText(selectedItem.password || "");
+    pushToast("Password copiada", "success");
   };
 
-  const onDelete = async (id) => {
-    try {
-      await removeItem(id);
-      pushToast("Credencial eliminada", "info");
-    } catch (error) {
-      pushToast(error.message, "error");
-    }
+  const toggleFavorite = (id) => {
+    const current = new Set(favoriteIds);
+    if (current.has(id)) current.delete(id);
+    else current.add(id);
+    setFavoriteIds(Array.from(current));
   };
 
-  const checkBreachNow = async (item) => {
+  const loadHistory = async () => {
+    if (!selectedItem) return;
+    setHistoryLoading(true);
     try {
-      const updated = await checkCredentialBreach?.(item.id);
-      if (updated?.breachStatus?.compromised) {
-        pushToast(`Brecha detectada en ${updated.service}`, "error");
-      } else {
-        pushToast(`Sin brecha detectada en ${item.service}`, "success");
-      }
-    } catch (error) {
-      pushToast(error.message, "error");
-    }
-  };
-
-  const toggleHistory = async (item) => {
-    if (historyById[item.id]) {
-      setHistoryById((prev) => {
-        const next = { ...prev };
-        delete next[item.id];
-        return next;
-      });
-      return;
-    }
-
-    setHistoryLoading((prev) => ({ ...prev, [item.id]: true }));
-    try {
-      const history = await getCredentialHistory?.(item.id);
-      setHistoryById((prev) => ({ ...prev, [item.id]: history }));
-    } catch (error) {
-      pushToast(error.message, "error");
+      const data = await getCredentialHistory?.(selectedItem.id);
+      setHistory(data || null);
+    } catch (e) {
+      pushToast(e.message, "error");
     } finally {
-      setHistoryLoading((prev) => ({ ...prev, [item.id]: false }));
+      setHistoryLoading(false);
     }
   };
 
-  const toggleAutoRotation = async (item, enabled) => {
-    try {
-      const updated = await updateRotationPolicy?.(item.id, { enabled });
-      if (!updated) return;
-      pushToast(
-        enabled
-          ? `Auto-rotacion activada para ${item.service}`
-          : `Auto-rotacion desactivada para ${item.service}`,
-        "info"
-      );
-    } catch (error) {
-      pushToast(error.message, "error");
+  const shareSelected = async () => {
+    if (!selectedItem) return;
+    if (shareTargets.length === 0) {
+      pushToast("No hay dispositivos destino para compartir. Registra uno en Settings.", "error");
+      return;
     }
-  };
-
-  const rotateNow = async (item) => {
     try {
-      const result = await rotateCredentialNow?.(item.id, "vault_manual");
-      const kindLabel = getRotationKindLabel(result?.rotation?.kind);
-      pushToast(`Rotacion completada (${kindLabel}) en ${item.service}`, "success");
-    } catch (error) {
-      pushToast(error.message, "error");
-    }
-  };
-
-  const setField = (name, value) => setForm((prev) => ({ ...prev, [name]: value }));
-
-  const generateHoneyBatch = async () => {
-    try {
-      const created = await generateHoneyPasswords?.(3);
-      pushToast(`Honey passwords generadas: ${created?.length || 0}`, "info");
+      const target = shareTargets[0];
+      const data = await api.createCredentialSharePackage({
+        credentialId: selectedItem.id,
+        targetDeviceId: target.id
+      });
+      await navigator.clipboard.writeText(JSON.stringify(data.package, null, 2));
+      pushToast(`Paquete compartido copiado (${target.label})`, "success");
     } catch (e) {
       pushToast(e.message, "error");
     }
@@ -200,162 +234,325 @@ export default function VaultPage({
     <section>
       <header className="page-head">
         <h2>Vault</h2>
-        <p>Alta, busqueda y gestion de credenciales.</p>
+        <p>Diseno 0.6.2 con categorias, lista central y panel de detalle.</p>
       </header>
 
-      <div className="vault-grid">
-        <section className="panel">
-          <h3>Nueva credencial</h3>
-          <form className="form" onSubmit={onSubmit}>
-            <label>
-              Servicio
-              <input value={form.service} onChange={(e) => setField("service", e.target.value)} />
-            </label>
-            <label>
-              Usuario
-              <input value={form.username} onChange={(e) => setField("username", e.target.value)} />
-            </label>
-            <label>
-              Password
-              <input
-                value={form.password}
-                onChange={(e) => setField("password", e.target.value)}
-                placeholder={generatedPassword || "Escribe o genera en pagina Generator"}
-              />
-            </label>
-            <PasswordStrength value={form.password} />
-            <label>
-              Categoria
-              <select value={form.category} onChange={(e) => setField("category", e.target.value)}>
-                <option>General</option>
-                <option>Work</option>
-                <option>Finance</option>
-                <option>Social</option>
-              </select>
-            </label>
-            <label>
-              Notas
-              <textarea value={form.notes} onChange={(e) => setField("notes", e.target.value)} rows={3} />
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={Boolean(form.isSensitive)}
-                onChange={(e) => setField("isSensitive", e.target.checked)}
-              />
-              Marcar como sensible (modo viaje la ocultara)
-            </label>
-            <button className="primary-btn" type="submit">
-              <Plus size={16} /> Guardar
-            </button>
-          </form>
-        </section>
+      <div className="vault-layout-062">
+        <aside className="panel vault-categories">
+          <h3>Categorias</h3>
+          <ul className="vault-category-list">
+            {CATEGORY_DEFS.map((cat) => (
+              <li key={cat.key}>
+                <button
+                  type="button"
+                  className={`vault-category-btn ${activeCategory === cat.key ? "active" : ""}`}
+                  onClick={() => setActiveCategory(cat.key)}
+                >
+                  <span>{cat.label}</span>
+                  <small>{counts[cat.key] || 0}</small>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button className="primary-btn vault-add-btn" type="button" onClick={() => setShowAddForm((v) => !v)}>
+            <Plus size={14} /> {showAddForm ? "Cerrar alta" : "Nueva entrada"}
+          </button>
+          {showAddForm ? (
+            <form className="form compact-form" onSubmit={addNewEntry}>
+              <label>
+                Servicio
+                <input value={addForm.service} onChange={(e) => setAddForm((p) => ({ ...p, service: e.target.value }))} />
+              </label>
+              <label>
+                Usuario
+                <input value={addForm.username} onChange={(e) => setAddForm((p) => ({ ...p, username: e.target.value }))} />
+              </label>
+              <label>
+                Password
+                <input
+                  value={addForm.password}
+                  onChange={(e) => setAddForm((p) => ({ ...p, password: e.target.value }))}
+                  placeholder={generatedPassword || "Escribe password"}
+                />
+              </label>
+              <button className="primary-btn" type="submit">
+                Guardar
+              </button>
+            </form>
+          ) : null}
+        </aside>
 
-        <section className="panel">
-          <div className="search-box">
-            <Search size={16} />
+        <section className="panel vault-list-panel">
+          <div className="vault-list-toolbar">
             <input
-              placeholder="Buscar por servicio, usuario o categoria..."
+              className="vault-inline-search"
+              placeholder="Buscar por servicio, usuario o tags..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-          </div>
-          <div className="filter-row">
-            <label>
-              Categoria
-              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-                {categories.map((category) => (
-                  <option key={category}>{category}</option>
-                ))}
-              </select>
-            </label>
-            <button className="danger-btn" type="button" onClick={generateHoneyBatch}>
-              <ShieldAlert size={16} /> Generar honey passwords
-            </button>
+            <div className="inline-actions">
+              <button className={`icon-btn ${viewMode === "cards" ? "active" : ""}`} type="button" onClick={() => setViewMode("cards")}>
+                <LayoutGrid size={14} />
+              </button>
+              <button className={`icon-btn ${viewMode === "table" ? "active" : ""}`} type="button" onClick={() => setViewMode("table")}>
+                <Table2 size={14} />
+              </button>
+            </div>
           </div>
 
           {loading ? <p className="muted">Cargando...</p> : null}
           {!loading && error ? <p className="error-text">{error}</p> : null}
-          {!loading && filtered.length === 0 ? <p className="muted">No hay resultados.</p> : null}
-          <div className="card-list">
-            {filtered.map((item) => (
-              <div key={item.id} className="card-wrap">
-                <PasswordCard
-                  item={item}
-                  onDelete={onDelete}
-                  onCopy={onCopy}
-                  onReveal={onReveal}
-                  travelModeActive={travelModeActive}
-                  presentationModeEnabled={presentationModeEnabled}
-                />
-                <div className="inline-actions">
-                  <button className="icon-btn" type="button" onClick={() => checkBreachNow(item)}>
-                    Verificar brecha
-                  </button>
-                  {item.rotationPolicy?.supported ? (
-                    <>
-                      <button className="icon-btn" type="button" onClick={() => rotateNow(item)}>
-                        Rotar ahora
+          {!loading && filtered.length === 0 ? <p className="muted">Sin resultados en esta categoria.</p> : null}
+
+          {viewMode === "cards" ? (
+            <div className="vault-entry-list">
+              {filtered.map((item) => {
+                const meta = getTypeMeta(item.entryType);
+                const Icon = meta.icon;
+                const strength = getStrengthLabel(item.password || "");
+                const strengthTone = strength.toLowerCase();
+                const isFavorite = new Set(favoriteIds).has(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`entry-row-card ${selectedId === item.id ? "selected" : ""}`}
+                    onClick={() => setSelectedId(item.id)}
+                  >
+                    <div className="entry-row-main">
+                      <div className="entry-icon">
+                        <Icon size={15} />
+                      </div>
+                      <div className="entry-text">
+                        <strong>{item.service}</strong>
+                        <small>{presentationModeEnabled ? "[PRESENTATION_MODE]" : item.username || "Sin usuario"}</small>
+                      </div>
+                    </div>
+                    <div className="entry-row-side">
+                      <span className={`strength-pill ${strengthTone}`}>{strength}</span>
+                      <button
+                        type="button"
+                        className={`icon-btn star-btn ${isFavorite ? "active" : ""}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleFavorite(item.id);
+                        }}
+                      >
+                        <Star size={13} />
                       </button>
-                      <label className="check muted">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(item.rotationPolicy?.enabled)}
-                          onChange={(e) => toggleAutoRotation(item, e.target.checked)}
-                        />
-                        Auto-rotacion
-                      </label>
-                    </>
-                  ) : null}
-                  <button className="icon-btn" type="button" onClick={() => toggleHistory(item)}>
-                    {historyLoading[item.id] ? "Cargando..." : historyById[item.id] ? "Ocultar historial" : "Ver historial"}
+                    </div>
+                    <div className="entry-tags">
+                      {extractTags(item).slice(0, 3).map((tag) => (
+                        <span key={`${item.id}-${tag}`} className="tag-chip">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
                   </button>
-                </div>
-                {historyById[item.id] ? (
-                  <article className="panel">
-                    <h4>Historial de versiones</h4>
-                    <p className="muted">Creada: {new Date(historyById[item.id].createdAt).toLocaleString("es-ES")}</p>
-                    <p className="muted">Version actual: v{historyById[item.id].currentVersion}</p>
-                    <p className="muted">Cambios registrados:</p>
-                    <ul className="security-list">
-                      {(historyById[item.id].changes || []).slice(0, 8).map((entry, idx) => (
-                        <li key={`${item.id}-change-${idx}`}>
-                          <strong>{entry.type}</strong>
-                          <small>{new Date(entry.at).toLocaleString("es-ES")}</small>
-                          <small>{Array.isArray(entry.fields) ? entry.fields.join(", ") : ""}</small>
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="muted">Versiones anteriores:</p>
-                    <ul className="security-list">
-                      {(historyById[item.id].previousVersions || []).slice(0, 8).map((entry, idx) => (
-                        <li key={`${item.id}-version-${idx}`}>
-                          <strong>v{entry.version}</strong>
-                          <small>{new Date(entry.changedAt).toLocaleString("es-ES")}</small>
-                          <code>{presentationModeEnabled ? "[PRESENTATION_MODE]" : entry.password || "[NO_DATA]"}</code>
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
-                ) : null}
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="vault-table-wrap">
+              <table className="vault-table">
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th>Servicio</th>
+                    <th>Usuario</th>
+                    <th>Fortaleza</th>
+                    <th>Tags</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((item) => {
+                    const meta = getTypeMeta(item.entryType);
+                    const Icon = meta.icon;
+                    const strength = getStrengthLabel(item.password || "");
+                    return (
+                      <tr key={item.id} className={selectedId === item.id ? "selected" : ""} onClick={() => setSelectedId(item.id)}>
+                        <td>
+                          <Icon size={14} />
+                        </td>
+                        <td>{item.service}</td>
+                        <td>{presentationModeEnabled ? "[PRESENTATION_MODE]" : item.username || "-"}</td>
+                        <td>
+                          <span className={`strength-pill ${strength.toLowerCase()}`}>{strength}</span>
+                        </td>
+                        <td>
+                          <div className="table-tags">
+                            {extractTags(item).slice(0, 2).map((tag) => (
+                              <span key={`${item.id}-${tag}`} className="tag-chip">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
+
+        <aside className="panel vault-detail-panel">
+          {!selectedItem ? (
+            <p className="muted">Selecciona una entrada para ver detalle.</p>
+          ) : (
+            <>
+              <header className="detail-head">
+                <div>
+                  <h3>{selectedItem.service}</h3>
+                  <p className="muted">{selectedItem.category}</p>
+                </div>
+                <span className="badge">{getTypeMeta(selectedItem.entryType).label}</span>
+              </header>
+
+              <section className="detail-block">
+                <strong>Usuario</strong>
+                <code>{presentationModeEnabled ? "[PRESENTATION_MODE]" : selectedItem.username || "-"}</code>
+              </section>
+
+              <section className="detail-block">
+                <strong>Password</strong>
+                <code>
+                  {presentationModeEnabled
+                    ? "[PRESENTATION_MODE]"
+                    : travelModeActive && selectedItem.isSensitive
+                      ? "[TRAVEL_MODE_LOCKED]"
+                      : showPassword
+                        ? selectedItem.password
+                        : "****************"}
+                </code>
+              </section>
+
+              <section className="detail-block">
+                <strong>Fortaleza</strong>
+                <span className={`strength-pill ${getStrengthLabel(selectedItem.password || "").toLowerCase()}`}>
+                  {getStrengthLabel(selectedItem.password || "")}
+                </span>
+              </section>
+
+              <section className="detail-block">
+                <strong>Tags</strong>
+                <div className="detail-tags">
+                  {extractTags(selectedItem).map((tag) => (
+                    <span key={`${selectedItem.id}-${tag}`} className="tag-chip">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </section>
+
+              <div className="detail-actions">
+                <button className="icon-btn" type="button" onClick={copyUsername}>
+                  Copiar usuario
+                </button>
+                <button className="icon-btn" type="button" onClick={copyPassword}>
+                  Copiar contrasena
+                </button>
+                <button className="icon-btn" type="button" onClick={() => setShowPassword((v) => !v)}>
+                  {showPassword ? "Ocultar" : "Mostrar"}
+                </button>
+                <button className="icon-btn" type="button" onClick={() => setEditing((v) => !v)}>
+                  {editing ? "Cancelar" : "Editar"}
+                </button>
+                <button className="icon-btn" type="button" onClick={loadHistory} disabled={historyLoading}>
+                  {historyLoading ? "Cargando..." : "Historial"}
+                </button>
+                <button className="icon-btn" type="button" onClick={shareSelected}>
+                  <Share2 size={13} /> Compartir
+                </button>
+              </div>
+
+              {editing ? (
+                <section className="detail-edit">
+                  <label>
+                    Servicio
+                    <input value={editForm.service || ""} onChange={(e) => setEditForm((p) => ({ ...p, service: e.target.value }))} />
+                  </label>
+                  <label>
+                    Usuario
+                    <input value={editForm.username || ""} onChange={(e) => setEditForm((p) => ({ ...p, username: e.target.value }))} />
+                  </label>
+                  <label>
+                    Password
+                    <input value={editForm.password || ""} onChange={(e) => setEditForm((p) => ({ ...p, password: e.target.value }))} />
+                  </label>
+                  <label>
+                    Categoria
+                    <input value={editForm.category || ""} onChange={(e) => setEditForm((p) => ({ ...p, category: e.target.value }))} />
+                  </label>
+                  <label>
+                    Notas
+                    <textarea value={editForm.notes || ""} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} rows={3} />
+                  </label>
+                  <button className="primary-btn" type="button" onClick={saveEdit}>
+                    Guardar cambios
+                  </button>
+                </section>
+              ) : null}
+
+              {history ? (
+                <section className="detail-history">
+                  <h4>Historial</h4>
+                  <ul className="security-list">
+                    {(history.changes || []).slice(0, 8).map((entry, index) => (
+                      <li key={`history-${selectedItem.id}-${index}`}>
+                        <strong>{entry.type}</strong>
+                        <small>{new Date(entry.at).toLocaleString("es-ES")}</small>
+                        <small>{Array.isArray(entry.fields) ? entry.fields.join(", ") : ""}</small>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
+              <button
+                className="danger-btn"
+                type="button"
+                onClick={() => removeItem(selectedItem.id)}
+              >
+                Eliminar entrada
+              </button>
+            </>
+          )}
+        </aside>
       </div>
     </section>
   );
 }
 
-function getRotationKindLabel(kind) {
-  switch (String(kind || "").toUpperCase()) {
-    case "GITHUB_TOKEN":
-      return "GitHub token";
-    case "SSH_KEY":
-      return "SSH key";
-    case "API_KEY":
-      return "API key";
-    default:
-      return "no compatible";
-  }
+function matchesCategory(item, key, favoriteIds, sharedIds) {
+  const type = String(item.entryType || "LOGIN").toUpperCase();
+  if (key === "ALL") return true;
+  if (key === "PASSWORDS") return type === "LOGIN" || type === "SSH_KEY";
+  if (key === "CARDS") return type === "CREDIT_CARD";
+  if (key === "SECURE_NOTES") return type === "SECURE_NOTE";
+  if (key === "API_KEYS") return type === "API_KEY";
+  if (key === "FAVORITES") return favoriteIds.has(item.id);
+  if (key === "SHARED") return sharedIds.has(item.id);
+  return true;
+}
+
+function getTypeMeta(entryType) {
+  const type = String(entryType || "LOGIN").toUpperCase();
+  if (type === "CREDIT_CARD") return { label: "Tarjeta", icon: CreditCard };
+  if (type === "SECURE_NOTE") return { label: "Nota segura", icon: FileText };
+  if (type === "API_KEY") return { label: "API Key", icon: KeyRound };
+  if (type === "SSH_KEY") return { label: "SSH Key", icon: LockKeyhole };
+  return { label: "Contrasena", icon: LockKeyhole };
+}
+
+function extractTags(item) {
+  const tags = new Set();
+  if (item.category) tags.add(item.category);
+  tags.add(getTypeMeta(item.entryType).label);
+  if (item.isSensitive) tags.add("Sensitive");
+  if (item.rotationPolicy?.enabled) tags.add("Auto-rotacion");
+  const noteTags = (String(item.notes || "").match(/#[a-z0-9_-]+/gi) || []).map((v) => v.toLowerCase());
+  for (const tag of noteTags) tags.add(tag);
+  return Array.from(tags);
 }
