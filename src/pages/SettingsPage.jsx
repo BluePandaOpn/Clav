@@ -13,6 +13,9 @@ export default function SettingsPage({
   rotateCredentialNow,
   rotateDueNow,
   listRotationDue,
+  offlineMode,
+  pendingSyncCount,
+  syncNow,
   autoLockEnabled,
   setAutoLockEnabled,
   autoLockMinutes,
@@ -60,6 +63,14 @@ export default function SettingsPage({
   const [sharedMemberPermission, setSharedMemberPermission] = useState("READ");
   const [sharedMemberExpiresHours, setSharedMemberExpiresHours] = useState(24);
   const [sharedCredentialId, setSharedCredentialId] = useState("");
+  const [emergencyContacts, setEmergencyContacts] = useState([]);
+  const [emergencyRequests, setEmergencyRequests] = useState([]);
+  const [emergencyLabel, setEmergencyLabel] = useState("");
+  const [emergencyWaitDays, setEmergencyWaitDays] = useState(7);
+  const [emergencyRequestActor, setEmergencyRequestActor] = useState("");
+  const [selectedEmergencyContactId, setSelectedEmergencyContactId] = useState("");
+  const [selectedEmergencyRequestId, setSelectedEmergencyRequestId] = useState("");
+  const [emergencyGrantPreview, setEmergencyGrantPreview] = useState(null);
 
   useEffect(() => {
     loadSecurityData();
@@ -109,6 +120,12 @@ export default function SettingsPage({
       }
       const sharedRes = await api.listSharedVaults(sharedActor || "owner");
       setSharedVaults(sharedRes.items || []);
+      const [emergencyContactsRes, emergencyRequestsRes] = await Promise.all([
+        api.listEmergencyContacts(),
+        api.listEmergencyRequests()
+      ]);
+      setEmergencyContacts(emergencyContactsRes.items || []);
+      setEmergencyRequests(emergencyRequestsRes.items || []);
     } catch {
       // Silent by design in settings panel.
     }
@@ -451,6 +468,104 @@ export default function SettingsPage({
     }
   };
 
+  const upsertEmergencyContact = async () => {
+    if (!emergencyLabel.trim()) {
+      pushToast("Indica nombre del contacto de emergencia", "error");
+      return;
+    }
+    setSharedBusy(true);
+    try {
+      const data = await api.createEmergencyContact({
+        label: emergencyLabel.trim(),
+        waitDays: Number(emergencyWaitDays || 7)
+      });
+      setSelectedEmergencyContactId(data?.item?.id || "");
+      setEmergencyRequestActor(emergencyLabel.trim());
+      setEmergencyLabel("");
+      await loadSecurityData();
+      pushToast("Contacto de emergencia guardado", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setSharedBusy(false);
+    }
+  };
+
+  const createEmergencyRequestNow = async () => {
+    if (!selectedEmergencyContactId) {
+      pushToast("Selecciona contacto de emergencia", "error");
+      return;
+    }
+    setSharedBusy(true);
+    try {
+      const actor = emergencyRequestActor.trim();
+      if (!actor) throw new Error("Debes indicar actor del contacto para solicitar acceso.");
+      const data = await api.createEmergencyRequest({
+        contactId: selectedEmergencyContactId,
+        requestedBy: actor
+      });
+      setSelectedEmergencyRequestId(data?.item?.id || "");
+      await loadSecurityData();
+      pushToast("Solicitud de Emergency Access creada", "info");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setSharedBusy(false);
+    }
+  };
+
+  const resolveEmergencyRequestNow = async (decision) => {
+    if (!selectedEmergencyRequestId) {
+      pushToast("Selecciona solicitud de emergencia", "error");
+      return;
+    }
+    setSharedBusy(true);
+    try {
+      await api.resolveEmergencyRequest(selectedEmergencyRequestId, {
+        decision,
+        actor: "owner"
+      });
+      await loadSecurityData();
+      pushToast(`Solicitud ${decision === "APPROVE" ? "aprobada" : "denegada"}`, "info");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setSharedBusy(false);
+    }
+  };
+
+  const previewEmergencyGrant = async () => {
+    if (!selectedEmergencyRequestId) {
+      pushToast("Selecciona solicitud de emergencia", "error");
+      return;
+    }
+    const actor = emergencyRequestActor.trim();
+    if (!actor) {
+      pushToast("Indica actor del contacto para validar acceso", "error");
+      return;
+    }
+    setSharedBusy(true);
+    try {
+      const grant = await api.getEmergencyGrant(selectedEmergencyRequestId, actor);
+      setEmergencyGrantPreview(grant);
+      pushToast("Acceso de emergencia concedido", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setSharedBusy(false);
+    }
+  };
+
+  const runOfflineSyncNow = async () => {
+    try {
+      await syncNow?.();
+      await loadSecurityData();
+      pushToast("Sincronizacion manual ejecutada", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    }
+  };
+
   return (
     <section>
       <header className="page-head">
@@ -558,6 +673,106 @@ export default function SettingsPage({
       </div>
 
       <div className="panel settings-grid security-grid">
+        <article className="action-card">
+          <h3>5.3 Modo offline completo</h3>
+          <p>El vault opera offline y sincroniza cambios al volver la conexion.</p>
+          <small className="muted">Estado de red: {offlineMode ? "OFFLINE" : "online"}</small>
+          <small className="muted">Cambios pendientes por sincronizar: {pendingSyncCount}</small>
+          <button className="primary-btn" type="button" onClick={runOfflineSyncNow}>
+            Sincronizar ahora
+          </button>
+        </article>
+
+        <article className="action-card">
+          <h3>5.2 Emergency Access</h3>
+          <p>Permite acceso al vault si no respondes en X dias.</p>
+          <label>
+            Contacto de emergencia
+            <input
+              value={emergencyLabel}
+              onChange={(e) => setEmergencyLabel(e.target.value)}
+              placeholder="nombre o email del contacto"
+            />
+          </label>
+          <label>
+            Espera X dias
+            <input
+              type="number"
+              min="1"
+              max="365"
+              step="1"
+              value={emergencyWaitDays}
+              onChange={(e) => setEmergencyWaitDays(Number(e.target.value || 7))}
+            />
+          </label>
+          <button className="primary-btn" type="button" onClick={upsertEmergencyContact} disabled={sharedBusy}>
+            Guardar contacto
+          </button>
+          <label>
+            Contacto seleccionado
+            <select value={selectedEmergencyContactId} onChange={(e) => setSelectedEmergencyContactId(e.target.value)}>
+              <option value="">Seleccionar...</option>
+              {emergencyContacts.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label} (espera {item.waitDays} dias)
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Actor del contacto (simulacion)
+            <input
+              value={emergencyRequestActor}
+              onChange={(e) => setEmergencyRequestActor(e.target.value)}
+              placeholder="debe coincidir con el contacto"
+            />
+          </label>
+          <button className="icon-btn" type="button" onClick={createEmergencyRequestNow} disabled={sharedBusy}>
+            Solicitar acceso de emergencia
+          </button>
+          <label>
+            Solicitud
+            <select value={selectedEmergencyRequestId} onChange={(e) => setSelectedEmergencyRequestId(e.target.value)}>
+              <option value="">Seleccionar...</option>
+              {emergencyRequests.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.contactLabel} - {item.status}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="inline-actions">
+            <button className="icon-btn" type="button" onClick={() => resolveEmergencyRequestNow("APPROVE")} disabled={sharedBusy}>
+              Aprobar (owner)
+            </button>
+            <button className="icon-btn" type="button" onClick={() => resolveEmergencyRequestNow("DENY")} disabled={sharedBusy}>
+              Denegar (owner)
+            </button>
+            <button className="primary-btn" type="button" onClick={previewEmergencyGrant} disabled={sharedBusy}>
+              Probar acceso concedido
+            </button>
+          </div>
+          {emergencyGrantPreview ? (
+            <div className="qr-box">
+              <small>Solicitud: {emergencyGrantPreview.requestId}</small>
+              <small>Estado: {emergencyGrantPreview.status}</small>
+              <small>Contacto: {emergencyGrantPreview.contact?.label}</small>
+              <small>Items visibles: {Array.isArray(emergencyGrantPreview.items) ? emergencyGrantPreview.items.length : 0}</small>
+            </div>
+          ) : null}
+          <ul className="security-list">
+            {emergencyRequests.slice(0, 8).map((item) => (
+              <li key={item.id}>
+                <strong>
+                  {item.contactLabel} - {item.status}
+                </strong>
+                <small>Solicitado: {new Date(item.requestedAt).toLocaleString("es-ES")}</small>
+                <small>Expira: {new Date(item.expiresAt).toLocaleString("es-ES")}</small>
+              </li>
+            ))}
+          </ul>
+        </article>
+
         <article className="action-card">
           <h3>5.1 Cofre compartido</h3>
           <p>Comparte credenciales con familia, equipos o empresas con permisos por miembro.</p>

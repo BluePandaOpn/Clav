@@ -31,7 +31,14 @@ async function ensureStore() {
   const hasAnyShard = await anyShardExists();
   if (!hasAnyShard) {
     const legacy = await readLegacyStoreIfExists();
-    const seed = normalizeStore(legacy || { credentials: [], trustedDevices: [], auditLogs: [], sharedVaults: [] });
+    const seed = normalizeStore(legacy || {
+      credentials: [],
+      trustedDevices: [],
+      auditLogs: [],
+      sharedVaults: [],
+      emergencyContacts: [],
+      emergencyRequests: []
+    });
     await writeShardsFromStore(seed, null);
     return;
   }
@@ -40,7 +47,9 @@ async function ensureStore() {
     credentials: [],
     trustedDevices: [],
     auditLogs: [],
-    sharedVaults: []
+    sharedVaults: [],
+    emergencyContacts: [],
+    emergencyRequests: []
   });
   const crypto = await readJsonSafe(CRYPTO_FILE_PATH, { credentials: [] });
   const metadata = await readJsonSafe(METADATA_FILE_PATH, null);
@@ -71,7 +80,9 @@ async function readCombinedFromShards() {
     credentials: [],
     trustedDevices: [],
     auditLogs: [],
-    sharedVaults: []
+    sharedVaults: [],
+    emergencyContacts: [],
+    emergencyRequests: []
   });
   const cryptoShard = await readJsonSafe(CRYPTO_FILE_PATH, { credentials: [] });
   const entriesList = Array.isArray(entriesShard.credentials) ? entriesShard.credentials : [];
@@ -97,7 +108,9 @@ async function readCombinedFromShards() {
     credentials,
     trustedDevices: Array.isArray(entriesShard.trustedDevices) ? entriesShard.trustedDevices : [],
     auditLogs: Array.isArray(entriesShard.auditLogs) ? entriesShard.auditLogs : [],
-    sharedVaults: Array.isArray(entriesShard.sharedVaults) ? entriesShard.sharedVaults : []
+    sharedVaults: Array.isArray(entriesShard.sharedVaults) ? entriesShard.sharedVaults : [],
+    emergencyContacts: Array.isArray(entriesShard.emergencyContacts) ? entriesShard.emergencyContacts : [],
+    emergencyRequests: Array.isArray(entriesShard.emergencyRequests) ? entriesShard.emergencyRequests : []
   });
 }
 
@@ -121,7 +134,9 @@ async function writeShardsFromStore(store, previousMetadata) {
     credentials: entryCredentials,
     trustedDevices: Array.isArray(store.trustedDevices) ? store.trustedDevices : [],
     auditLogs: Array.isArray(store.auditLogs) ? store.auditLogs : [],
-    sharedVaults: Array.isArray(store.sharedVaults) ? store.sharedVaults : []
+    sharedVaults: Array.isArray(store.sharedVaults) ? store.sharedVaults : [],
+    emergencyContacts: Array.isArray(store.emergencyContacts) ? store.emergencyContacts : [],
+    emergencyRequests: Array.isArray(store.emergencyRequests) ? store.emergencyRequests : []
   };
   const cryptoShard = {
     credentials: cryptoCredentials
@@ -148,7 +163,9 @@ function buildMetadata(entriesShard, cryptoShard, previousMetadata) {
       credentialsCrypto: Array.isArray(cryptoShard.credentials) ? cryptoShard.credentials.length : 0,
       trustedDevices: Array.isArray(entriesShard.trustedDevices) ? entriesShard.trustedDevices.length : 0,
       auditLogs: Array.isArray(entriesShard.auditLogs) ? entriesShard.auditLogs.length : 0,
-      sharedVaults: Array.isArray(entriesShard.sharedVaults) ? entriesShard.sharedVaults.length : 0
+      sharedVaults: Array.isArray(entriesShard.sharedVaults) ? entriesShard.sharedVaults.length : 0,
+      emergencyContacts: Array.isArray(entriesShard.emergencyContacts) ? entriesShard.emergencyContacts.length : 0,
+      emergencyRequests: Array.isArray(entriesShard.emergencyRequests) ? entriesShard.emergencyRequests.length : 0
     }
   };
 }
@@ -1073,6 +1090,183 @@ export async function removeCredentialFromSharedVault(vaultId, credentialId, act
   return materializeSharedVault(updated, db.credentials || [], actor, Date.now());
 }
 
+export async function listEmergencyContacts() {
+  const db = await readStore();
+  return (db.emergencyContacts || []).map((item) => ({
+    id: item.id,
+    label: item.label,
+    waitDays: Number(item.waitDays || 7),
+    note: item.note || "",
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt
+  }));
+}
+
+export async function createEmergencyContact(payload = {}) {
+  const db = await readStore();
+  const label = String(payload.label || "").trim();
+  if (!label) {
+    const err = new Error("label is required");
+    err.statusCode = 400;
+    throw err;
+  }
+  const now = new Date().toISOString();
+  const waitDays = clampEmergencyWaitDays(payload.waitDays);
+  const existingIndex = (db.emergencyContacts || []).findIndex((item) => normalizeActor(item.label) === normalizeActor(label));
+  const item = {
+    id: existingIndex >= 0 ? db.emergencyContacts[existingIndex].id : randomUUID(),
+    label,
+    note: String(payload.note || ""),
+    waitDays,
+    createdAt: existingIndex >= 0 ? db.emergencyContacts[existingIndex].createdAt : now,
+    updatedAt: now
+  };
+  if (existingIndex >= 0) {
+    db.emergencyContacts[existingIndex] = item;
+  } else {
+    db.emergencyContacts.unshift(item);
+  }
+  await writeStore(db);
+  return item;
+}
+
+export async function deleteEmergencyContact(contactId) {
+  const db = await readStore();
+  const before = (db.emergencyContacts || []).length;
+  db.emergencyContacts = (db.emergencyContacts || []).filter((item) => item.id !== contactId);
+  db.emergencyRequests = (db.emergencyRequests || []).filter((item) => item.contactId !== contactId);
+  if ((db.emergencyContacts || []).length === before) return false;
+  await writeStore(db);
+  return true;
+}
+
+export async function listEmergencyRequests() {
+  const db = await readStore();
+  const contactsById = new Map((db.emergencyContacts || []).map((item) => [item.id, item]));
+  return (db.emergencyRequests || [])
+    .map((item) => materializeEmergencyRequest(item, contactsById))
+    .sort((a, b) => Date.parse(b.requestedAt || 0) - Date.parse(a.requestedAt || 0));
+}
+
+export async function createEmergencyRequest(contactId, payload = {}) {
+  const db = await readStore();
+  const contact = (db.emergencyContacts || []).find((item) => item.id === contactId);
+  if (!contact) {
+    const err = new Error("emergency contact not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  const requestedBy = normalizeActor(payload.requestedBy || contact.label);
+  if (requestedBy !== normalizeActor(contact.label)) {
+    const err = new Error("requestedBy does not match emergency contact");
+    err.statusCode = 403;
+    throw err;
+  }
+  const nowTs = Date.now();
+  const expiresAt = new Date(nowTs + clampEmergencyWaitDays(contact.waitDays) * 24 * 60 * 60 * 1000).toISOString();
+  const item = {
+    id: randomUUID(),
+    contactId: contact.id,
+    requestedBy,
+    status: "PENDING",
+    requestedAt: new Date(nowTs).toISOString(),
+    expiresAt,
+    resolvedAt: null,
+    decisionBy: null
+  };
+  db.emergencyRequests.unshift(item);
+  db.emergencyRequests = db.emergencyRequests.slice(0, 300);
+  await writeStore(db);
+  return materializeEmergencyRequest(item, new Map([[contact.id, contact]]));
+}
+
+export async function resolveEmergencyRequest(requestId, payload = {}) {
+  const db = await readStore();
+  const index = (db.emergencyRequests || []).findIndex((item) => item.id === requestId);
+  if (index === -1) return null;
+  const existing = db.emergencyRequests[index];
+  if (existing.status !== "PENDING") {
+    return materializeEmergencyRequest(existing, new Map((db.emergencyContacts || []).map((item) => [item.id, item])));
+  }
+  const decision = String(payload.decision || "").trim().toUpperCase();
+  if (decision !== "APPROVE" && decision !== "DENY") {
+    const err = new Error("decision must be APPROVE or DENY");
+    err.statusCode = 400;
+    throw err;
+  }
+  const actor = normalizeActor(payload.actor || "owner");
+  if (actor !== "owner") {
+    const err = new Error("only owner can resolve emergency requests");
+    err.statusCode = 403;
+    throw err;
+  }
+  const updated = {
+    ...existing,
+    status: decision === "APPROVE" ? "APPROVED" : "DENIED",
+    resolvedAt: new Date().toISOString(),
+    decisionBy: actor
+  };
+  db.emergencyRequests[index] = updated;
+  await writeStore(db);
+  return materializeEmergencyRequest(updated, new Map((db.emergencyContacts || []).map((item) => [item.id, item])));
+}
+
+export async function processEmergencyAccessDeadlines(nowTs = Date.now()) {
+  const db = await readStore();
+  const requests = Array.isArray(db.emergencyRequests) ? db.emergencyRequests : [];
+  let changed = false;
+  for (let i = 0; i < requests.length; i += 1) {
+    const item = requests[i];
+    if (item.status !== "PENDING") continue;
+    const expiresAt = Date.parse(item.expiresAt || "");
+    if (Number.isNaN(expiresAt) || expiresAt > nowTs) continue;
+    requests[i] = {
+      ...item,
+      status: "APPROVED_AUTO",
+      resolvedAt: new Date(nowTs).toISOString(),
+      decisionBy: "system"
+    };
+    changed = true;
+  }
+  if (changed) {
+    db.emergencyRequests = requests;
+    await writeStore(db);
+  }
+  return changed;
+}
+
+export async function getEmergencyAccessGrant(requestId, actor = "") {
+  const db = await readStore();
+  const request = (db.emergencyRequests || []).find((item) => item.id === requestId);
+  if (!request) return null;
+  if (request.status !== "APPROVED" && request.status !== "APPROVED_AUTO") {
+    const err = new Error("emergency request is not approved");
+    err.statusCode = 403;
+    throw err;
+  }
+  const contact = (db.emergencyContacts || []).find((item) => item.id === request.contactId);
+  if (!contact) {
+    const err = new Error("emergency contact not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  if (normalizeActor(actor) !== normalizeActor(contact.label)) {
+    const err = new Error("actor does not match approved emergency contact");
+    err.statusCode = 403;
+    throw err;
+  }
+  return {
+    requestId: request.id,
+    status: request.status,
+    grantedAt: request.resolvedAt || request.requestedAt,
+    contact: {
+      id: contact.id,
+      label: contact.label
+    },
+    items: (db.credentials || []).map(materializeCredential)
+  };
+}
+
 function materializeCredential(item) {
   if (!item) return item;
   if (!item.passwordEnc && typeof item.password === "string") {
@@ -1144,7 +1338,9 @@ function normalizeStore(input) {
   const trustedDevices = Array.isArray(db.trustedDevices) ? db.trustedDevices : [];
   const auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
   const sharedVaults = Array.isArray(db.sharedVaults) ? db.sharedVaults : [];
-  return { credentials, trustedDevices, auditLogs, sharedVaults };
+  const emergencyContacts = Array.isArray(db.emergencyContacts) ? db.emergencyContacts : [];
+  const emergencyRequests = Array.isArray(db.emergencyRequests) ? db.emergencyRequests : [];
+  return { credentials, trustedDevices, auditLogs, sharedVaults, emergencyContacts, emergencyRequests };
 }
 
 function getChangedFields(existing, payload, hasPasswordChange) {
@@ -1249,6 +1445,12 @@ function normalizeAudience(value) {
   return "TEAM";
 }
 
+function clampEmergencyWaitDays(value) {
+  const days = Number(value);
+  if (!Number.isFinite(days)) return 7;
+  return Math.max(1, Math.min(365, Math.round(days)));
+}
+
 function normalizeSharedPermission(value) {
   const raw = String(value || "").trim().toUpperCase();
   if (raw === "READ" || raw === "WRITE" || raw === "TEMPORARY") return raw;
@@ -1317,5 +1519,20 @@ function materializeSharedVault(vault, allCredentials, actor, nowTs) {
     items,
     createdAt: vault.createdAt,
     updatedAt: vault.updatedAt
+  };
+}
+
+function materializeEmergencyRequest(item, contactsById) {
+  const contact = contactsById.get(item.contactId);
+  return {
+    id: item.id,
+    contactId: item.contactId,
+    contactLabel: contact?.label || "unknown",
+    requestedBy: item.requestedBy || "",
+    status: item.status || "PENDING",
+    requestedAt: item.requestedAt,
+    expiresAt: item.expiresAt,
+    resolvedAt: item.resolvedAt || null,
+    decisionBy: item.decisionBy || null
   };
 }

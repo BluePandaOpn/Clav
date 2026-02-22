@@ -192,6 +192,32 @@ Fecha: 2026-02-22
   - `POST /shared-vaults/:id/credentials`
   - `DELETE /shared-vaults/:id/credentials/:credentialId`
 
+## 5.2 - Emergency Access
+
+- Permite designar contactos de emergencia con ventana de espera de `X` dias.
+- Flujo:
+  - El contacto solicita acceso de emergencia.
+  - El owner puede aprobar o denegar manualmente.
+  - Si no hay respuesta antes del vencimiento, el sistema auto-aprueba.
+- Incluye scheduler backend para procesar solicitudes vencidas.
+- Endpoints:
+  - `GET /emergency/contacts`
+  - `POST /emergency/contacts`
+  - `DELETE /emergency/contacts/:id`
+  - `GET /emergency/requests`
+  - `POST /emergency/requests`
+  - `POST /emergency/requests/:id/resolve`
+  - `GET /emergency/grant/:requestId`
+
+## 5.3 - Modo offline completo
+
+- El cliente mantiene cola local de operaciones (`create`, `delete`, `clear`) cuando no hay internet.
+- El vault sigue operando con cache local cifrada sin depender del backend.
+- Al recuperar conexion:
+  - sincroniza automaticamente operaciones pendientes.
+  - permite sincronizacion manual desde `Settings`.
+- Se muestra estado `offline/online` y cantidad de cambios pendientes.
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

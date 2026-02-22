@@ -51,6 +51,41 @@ export const api = {
       }
     );
   },
+  async listEmergencyContacts() {
+    return request(`${API_BASE}/emergency/contacts`);
+  },
+  async createEmergencyContact(payload) {
+    return request(`${API_BASE}/emergency/contacts`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async deleteEmergencyContact(contactId) {
+    return request(`${API_BASE}/emergency/contacts/${contactId}`, {
+      method: "DELETE"
+    });
+  },
+  async listEmergencyRequests() {
+    return request(`${API_BASE}/emergency/requests`);
+  },
+  async createEmergencyRequest(payload) {
+    return request(`${API_BASE}/emergency/requests`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async resolveEmergencyRequest(requestId, payload) {
+    return request(`${API_BASE}/emergency/requests/${requestId}/resolve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async getEmergencyGrant(requestId, actor) {
+    return request(`${API_BASE}/emergency/grant/${requestId}?actor=${encodeURIComponent(actor || "")}`);
+  },
   async createCredential(payload) {
     return request(`${API_BASE}/credentials`, {
       method: "POST",

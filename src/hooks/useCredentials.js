@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../utils/api.js";
 import { API_BASE } from "../utils/api.js";
 
+const OFFLINE_QUEUE_KEY = "vault_offline_ops_v053";
+
 export function useCredentials(security) {
   const isUnlocked = Boolean(security?.isUnlocked);
   const saveEncryptedVault = security?.saveEncryptedVault;
@@ -9,6 +11,9 @@ export function useCredentials(security) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [offlineMode, setOfflineMode] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+  const [pendingOps, setPendingOps] = useState(() => readPendingOps());
+  const syncInFlightRef = useRef(false);
   const seenSyncIds = useRef(new Set());
   const clientId = useMemo(() => {
     const key = "vault_sync_client_id_v033";
@@ -20,6 +25,10 @@ export function useCredentials(security) {
   }, []);
   const counterRef = useRef(Number(localStorage.getItem(`vault_sync_counter_${clientId}`) || "0"));
 
+  useEffect(() => {
+    writePendingOps(pendingOps);
+  }, [pendingOps]);
+
   const refresh = useCallback(async () => {
     if (!isUnlocked) return;
     setLoading(true);
@@ -28,7 +37,9 @@ export function useCredentials(security) {
       const data = await api.listCredentials();
       setItems(data.items);
       await saveEncryptedVault?.(data.items);
+      setOfflineMode(false);
     } catch (e) {
+      setOfflineMode(true);
       const cached = (await loadEncryptedVault?.()) || [];
       if (cached.length > 0) {
         setItems(cached);
@@ -45,6 +56,17 @@ export function useCredentials(security) {
     if (!isUnlocked) return;
     refresh();
   }, [isUnlocked, refresh]);
+
+  useEffect(() => {
+    const onOnline = () => setOfflineMode(false);
+    const onOffline = () => setOfflineMode(true);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isUnlocked) return undefined;
@@ -103,6 +125,8 @@ export function useCredentials(security) {
       }
     };
 
+    if (offlineMode) return undefined;
+
     const sse = new EventSource(`${API_BASE}/sync/events`);
     sse.addEventListener("sync", (evt) => onEvent(evt.data));
 
@@ -116,35 +140,135 @@ export function useCredentials(security) {
       sse.close();
       ws?.close();
     };
-  }, [isUnlocked, saveEncryptedVault]);
+  }, [isUnlocked, saveEncryptedVault, offlineMode]);
+
+  const syncNow = useCallback(async () => {
+    if (!isUnlocked || syncInFlightRef.current) return;
+    if (!navigator.onLine) {
+      setOfflineMode(true);
+      return;
+    }
+    if (pendingOps.length === 0) {
+      await refresh();
+      return;
+    }
+    syncInFlightRef.current = true;
+    const idMap = new Map();
+    try {
+      let remaining = [...pendingOps];
+      for (let idx = 0; idx < remaining.length; idx += 1) {
+        const op = remaining[idx];
+        if (op.type === "clear") {
+          await api.clearCredentials();
+          continue;
+        }
+        if (op.type === "create") {
+          const data = await api.createCredential(op.payload);
+          idMap.set(op.localId, data.item.id);
+          setItems((prev) => {
+            const next = prev.map((item) => (item.id === op.localId ? data.item : item));
+            saveEncryptedVault?.(next);
+            return next;
+          });
+          continue;
+        }
+        if (op.type === "delete") {
+          const mappedId = idMap.get(op.targetId) || op.targetId;
+          if (String(mappedId).startsWith("local-")) continue;
+          await api.deleteCredential(mappedId);
+        }
+      }
+      setPendingOps([]);
+      await refresh();
+      setOfflineMode(false);
+    } catch {
+      setOfflineMode(true);
+    } finally {
+      syncInFlightRef.current = false;
+    }
+  }, [isUnlocked, pendingOps, refresh, saveEncryptedVault]);
+
+  useEffect(() => {
+    if (!isUnlocked || pendingOps.length === 0 || offlineMode) return;
+    syncNow();
+  }, [isUnlocked, pendingOps.length, offlineMode, syncNow]);
 
   const addItem = useCallback(async (payload) => {
-    const data = await api.createCredential({
+    const requestPayload = {
       ...payload,
       _crdt: nextCrdt(clientId, counterRef)
-    });
+    };
+    const localId = `local-${crypto.randomUUID()}`;
+    const now = new Date().toISOString();
+    const optimistic = {
+      id: localId,
+      service: payload.service,
+      username: payload.username || "",
+      password: payload.password,
+      category: payload.category || "General",
+      notes: payload.notes || "",
+      isSensitive: Boolean(payload.isSensitive),
+      isHoney: false,
+      createdAt: now,
+      updatedAt: now,
+      integrity: "offline_pending"
+    };
     setItems((prev) => {
-      const next = [data.item, ...prev];
+      const next = [optimistic, ...prev];
       saveEncryptedVault?.(next);
       return next;
     });
-    return data.item;
-  }, [saveEncryptedVault]);
+    try {
+      if (offlineMode) throw new Error("offline");
+      const data = await api.createCredential(requestPayload);
+      setItems((prev) => {
+        const next = prev.map((item) => (item.id === localId ? data.item : item));
+        saveEncryptedVault?.(next);
+        return next;
+      });
+      return data.item;
+    } catch {
+      setOfflineMode(true);
+      setPendingOps((prev) => [...prev, { id: crypto.randomUUID(), type: "create", localId, payload: requestPayload }]);
+      return optimistic;
+    }
+  }, [saveEncryptedVault, offlineMode]);
 
   const removeItem = useCallback(async (id) => {
-    await api.deleteCredential(id);
+    const isLocal = String(id).startsWith("local-");
     setItems((prev) => {
       const next = prev.filter((item) => item.id !== id);
       saveEncryptedVault?.(next);
       return next;
     });
-  }, [saveEncryptedVault]);
+    if (isLocal) {
+      setPendingOps((prev) => prev.filter((op) => !(op.type === "create" && op.localId === id)));
+      return;
+    }
+    try {
+      if (offlineMode) throw new Error("offline");
+      await api.deleteCredential(id);
+    } catch {
+      setOfflineMode(true);
+      setPendingOps((prev) => [
+        ...prev,
+        { opId: crypto.randomUUID(), type: "delete", targetId: String(id) }
+      ]);
+    }
+  }, [saveEncryptedVault, offlineMode]);
 
   const clearAll = useCallback(async () => {
-    await api.clearCredentials();
     setItems([]);
     saveEncryptedVault?.([]);
-  }, [saveEncryptedVault]);
+    try {
+      if (offlineMode) throw new Error("offline");
+      await api.clearCredentials();
+      setPendingOps([]);
+    } catch {
+      setOfflineMode(true);
+      setPendingOps([{ opId: crypto.randomUUID(), type: "clear" }]);
+    }
+  }, [saveEncryptedVault, offlineMode]);
 
   const generateHoneyPasswords = useCallback(async (count = 3) => {
     const data = await api.generateHoneyPasswords({ count });
@@ -253,7 +377,10 @@ export function useCredentials(security) {
     updateRotationPolicy,
     rotateCredentialNow,
     rotateDueNow,
-    listRotationDue
+    listRotationDue,
+    offlineMode,
+    pendingSyncCount: pendingOps.length,
+    syncNow
   };
 }
 
@@ -273,4 +400,22 @@ function buildWebSocketUrl() {
   const hostname = window.location.hostname || "localhost";
   const defaultPort = "4000";
   return `${protocol}//${hostname}:${defaultPort}${API_BASE}/sync/ws`;
+}
+
+function readPendingOps() {
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePendingOps(pendingOps) {
+  try {
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(Array.isArray(pendingOps) ? pendingOps : []));
+  } catch {
+    // Ignore storage write failures.
+  }
 }

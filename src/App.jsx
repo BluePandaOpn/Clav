@@ -34,7 +34,10 @@ export default function App() {
     updateRotationPolicy,
     rotateCredentialNow,
     rotateDueNow,
-    listRotationDue
+    listRotationDue,
+    offlineMode,
+    pendingSyncCount,
+    syncNow
   } = useCredentials(security);
   const { toasts, pushToast, removeToast } = useToasts();
   const [generatedPassword, setGeneratedPassword] = useState("");
@@ -157,6 +160,9 @@ export default function App() {
     rotateCredentialNow,
     rotateDueNow,
     listRotationDue,
+    offlineMode,
+    pendingSyncCount,
+    syncNow,
     pushToast,
     generatedPassword,
     setGeneratedPassword,

@@ -31,6 +31,8 @@ Gestor de passwords profesional con:
 - Auto-rotacion de credenciales (4.3): GitHub tokens, API keys y SSH keys con politica por entrada
 - Deteccion de patrones debiles (4.4): contrasenas parecidas, reutilizacion y secuencias comunes
 - Cofre compartido (5.1): compartir con familia/equipos/empresas con permisos lectura, escritura y temporal
+- Emergency Access (5.2): acceso de emergencia al vault si el owner no responde en X dias
+- Modo offline completo (5.3): operaciones locales sin internet + sincronizacion automatica al reconectar
 
 ## Requisitos
 
@@ -147,6 +149,13 @@ Prefix: `/api/v1/<API_NAMESPACE>`
 - `DELETE /shared-vaults/:id/members/:memberId`
 - `POST /shared-vaults/:id/credentials`
 - `DELETE /shared-vaults/:id/credentials/:credentialId`
+- `GET /emergency/contacts`
+- `POST /emergency/contacts`
+- `DELETE /emergency/contacts/:id`
+- `GET /emergency/requests`
+- `POST /emergency/requests`
+- `POST /emergency/requests/:id/resolve`
+- `GET /emergency/grant/:requestId`
 
 Endpoint publico de vida:
 - `GET /healthz`

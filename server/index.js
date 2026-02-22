@@ -10,19 +10,27 @@ import {
   addTrustedDevice,
   clearCredentials,
   createCredentialSharePackage,
+  createEmergencyContact,
+  createEmergencyRequest,
   createSharedVault,
   createCredential,
+  deleteEmergencyContact,
   deleteCredential,
   generateHoneyCredentials,
+  getEmergencyAccessGrant,
   getCredentialHistory,
   listShareTargets,
   listAuditLogs,
   listCredentials,
+  listEmergencyContacts,
+  listEmergencyRequests,
   listSharedVaults,
   listTrustedDevices,
+  processEmergencyAccessDeadlines,
   readStore,
   refreshCredentialBreachStatus,
   removeCredentialFromSharedVault,
+  resolveEmergencyRequest,
   removeSharedVaultMember,
   registerHoneyCredentialAccess,
   rotateCredentialSecret,
@@ -169,6 +177,99 @@ api.delete(
       userAgent: getUa(req)
     });
     return res.json({ item });
+  })
+);
+
+api.get(
+  "/emergency/contacts",
+  asyncHandler(async (_req, res) => {
+    const items = await listEmergencyContacts();
+    return res.json({ items });
+  })
+);
+
+api.post(
+  "/emergency/contacts",
+  asyncHandler(async (req, res) => {
+    const item = await createEmergencyContact(req.body || {});
+    await addAuditLog({
+      type: "EMERGENCY_CONTACT_UPSERTED",
+      detail: `${item.id}:${item.label}:wait=${item.waitDays}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    return res.status(201).json({ item });
+  })
+);
+
+api.delete(
+  "/emergency/contacts/:id",
+  asyncHandler(async (req, res) => {
+    const deleted = await deleteEmergencyContact(String(req.params.id));
+    if (!deleted) return res.status(404).json({ error: "emergency contact not found" });
+    await addAuditLog({
+      type: "EMERGENCY_CONTACT_DELETED",
+      detail: String(req.params.id),
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    return res.status(204).send();
+  })
+);
+
+api.get(
+  "/emergency/requests",
+  asyncHandler(async (_req, res) => {
+    await processEmergencyAccessDeadlines();
+    const items = await listEmergencyRequests();
+    return res.json({ items });
+  })
+);
+
+api.post(
+  "/emergency/requests",
+  asyncHandler(async (req, res) => {
+    const contactId = String(req.body?.contactId || "");
+    if (!contactId) return res.status(400).json({ error: "contactId is required" });
+    const item = await createEmergencyRequest(contactId, req.body || {});
+    await addAuditLog({
+      type: "EMERGENCY_ACCESS_REQUESTED",
+      detail: `${item.id}:${item.contactLabel}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    return res.status(201).json({ item });
+  })
+);
+
+api.post(
+  "/emergency/requests/:id/resolve",
+  asyncHandler(async (req, res) => {
+    const item = await resolveEmergencyRequest(String(req.params.id), req.body || {});
+    if (!item) return res.status(404).json({ error: "emergency request not found" });
+    await addAuditLog({
+      type: "EMERGENCY_ACCESS_RESOLVED",
+      detail: `${item.id}:${item.status}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    return res.json({ item });
+  })
+);
+
+api.get(
+  "/emergency/grant/:requestId",
+  asyncHandler(async (req, res) => {
+    const actor = String(req.query.actor || "");
+    const grant = await getEmergencyAccessGrant(String(req.params.requestId), actor);
+    if (!grant) return res.status(404).json({ error: "emergency request not found" });
+    await addAuditLog({
+      type: "EMERGENCY_ACCESS_GRANTED",
+      detail: `${grant.requestId}:${grant.contact.label}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    return res.json(grant);
   })
 );
 
@@ -672,6 +773,7 @@ backupService.start().catch(() => {
   // Non-fatal scheduler startup failure.
 });
 startRotationScheduler();
+startEmergencyScheduler();
 
 server.on("error", (error) => {
   if (error?.code === "EADDRINUSE") {
@@ -712,6 +814,28 @@ function startRotationScheduler() {
   };
   run().catch(() => {
     // Ignore startup errors; scheduler keeps running.
+  });
+  setInterval(run, intervalMs).unref?.();
+}
+
+function startEmergencyScheduler() {
+  const intervalMs = 60 * 1000;
+  const run = async () => {
+    try {
+      const changed = await processEmergencyAccessDeadlines();
+      if (!changed) return;
+      await addAuditLog({
+        type: "EMERGENCY_ACCESS_AUTO_APPROVED",
+        detail: "One or more pending requests were auto-approved by timeout.",
+        ip: "server",
+        userAgent: "emergency-scheduler"
+      });
+    } catch {
+      // Non-fatal scheduler failure.
+    }
+  };
+  run().catch(() => {
+    // Ignore startup failures.
   });
   setInterval(run, intervalMs).unref?.();
 }
