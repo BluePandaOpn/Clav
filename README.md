@@ -5,6 +5,13 @@ Gestor de passwords profesional con:
 - Backend en Node.js + Express
 - Multiples paginas (Dashboard, Vault, Generator, Settings)
 - Persistencia en archivo JSON (`server/data/vault.json`)
+- Cache local cifrada con password maestra (AES-GCM + PBKDF2)
+- Preferencias persistentes con `useLocalStorage`
+- Cifrado en servidor por multiples capas AES-256-GCM (hasta 10 capas)
+- Namespace de rutas API privado por `.env`
+- Hardening base: `helmet`, `express-rate-limit`, limites de payload
+- QR unlock de un solo uso con expiracion corta y firma HMAC
+- Registro automatico de dispositivos confiables + bitacora de seguridad
 
 ## Requisitos
 
@@ -17,6 +24,19 @@ Gestor de passwords profesional con:
 npm install
 ```
 
+Configura variables de entorno:
+
+```bash
+cp .env.example .env
+```
+
+Variables clave:
+- `API_NAMESPACE`: segmento privado de URL (min 24 chars).
+- `MASTER_ENCRYPTION_KEY`: clave maestra de backend (min 64 chars).
+- `ENCRYPTION_LAYERS`: entre 3 y 10.
+- `VITE_API_BASE`: debe coincidir con `API_NAMESPACE`.
+- `APP_BASE_URL`: URL publica frontend para enlaces QR.
+
 ## Desarrollo
 
 ```bash
@@ -25,7 +45,7 @@ npm run dev
 
 Servicios:
 - Frontend: `http://localhost:5173`
-- API: `http://localhost:4000`
+- API base: `http://localhost:4000/api/v1/<API_NAMESPACE>`
 
 ## Build
 
@@ -34,13 +54,36 @@ npm run build
 npm run preview
 ```
 
+Para previsualizar con API funcionando (frontend + backend en paralelo):
+
+```bash
+npm run preview:full
+```
+
+## Calidad de codigo
+
+```bash
+npm run lint
+npm run format:check
+```
+
 ## Endpoints API
 
-- `GET /api/health`
-- `GET /api/credentials`
-- `POST /api/credentials`
-- `PUT /api/credentials/:id`
-- `DELETE /api/credentials/:id`
-- `DELETE /api/credentials`
-- `POST /api/generate`
-- `GET /api/export`
+Prefix: `/api/v1/<API_NAMESPACE>`
+
+- `GET /health`
+- `GET /credentials`
+- `POST /credentials`
+- `PUT /credentials/:id`
+- `DELETE /credentials/:id`
+- `DELETE /credentials`
+- `POST /generate`
+- `GET /export`
+- `POST /qr/challenge`
+- `GET /qr/challenge/:id`
+- `POST /qr/approve`
+- `GET /devices`
+- `GET /audit`
+
+Endpoint publico de vida:
+- `GET /healthz`

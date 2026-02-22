@@ -1,5 +1,5 @@
 import React from "react";
-import { KeyRound, LayoutDashboard, LockKeyhole, Settings } from "lucide-react";
+import { Command, KeyRound, LayoutDashboard, LockKeyhole, Settings } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 const links = [
@@ -10,15 +10,23 @@ const links = [
 ];
 
 export default function AppShell({ children }) {
+  const appName = import.meta.env.VITE_APP_NAME || "Password Manager";
+
   return (
     <div className="app-root">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-logo">PM</div>
+          <div className="brand-logo">
+            <Command size={20} />
+          </div>
           <div>
-            <h1>Password Manager</h1>
+            <h1>{appName}_</h1>
             <p>Professional Vault</p>
           </div>
+        </div>
+        <div className="status-chip">
+          <span className="status-dot" />
+          <span>ENCRYPTED_AES_256</span>
         </div>
         <nav className="menu">
           {links.map((link) => {

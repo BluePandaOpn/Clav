@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Plus, Search } from "lucide-react";
 import PasswordCard from "../components/PasswordCard.jsx";
 import PasswordStrength from "../components/PasswordStrength.jsx";
+import { useLocalStorage } from "../hooks/useLocalStorage.js";
 
 const initialForm = {
   service: "",
@@ -11,21 +12,28 @@ const initialForm = {
   notes: ""
 };
 
-export default function VaultPage({ items, loading, addItem, removeItem, pushToast, generatedPassword }) {
+export default function VaultPage({ items, loading, error, addItem, removeItem, pushToast, generatedPassword }) {
   const [form, setForm] = useState(initialForm);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useLocalStorage("vault_search", "");
+  const [categoryFilter, setCategoryFilter] = useLocalStorage("vault_category_filter", "All");
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return items;
     return items.filter((item) => {
-      return (
+      const textMatch =
+        !q ||
         item.service.toLowerCase().includes(q) ||
         item.username.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q)
-      );
+        item.category.toLowerCase().includes(q);
+      const categoryMatch = categoryFilter === "All" || item.category === categoryFilter;
+      return textMatch && categoryMatch;
     });
-  }, [items, search]);
+  }, [items, search, categoryFilter]);
+
+  const categories = useMemo(() => {
+    const set = new Set(items.map((item) => item.category));
+    return ["All", ...Array.from(set).sort()];
+  }, [items]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -114,8 +122,19 @@ export default function VaultPage({ items, loading, addItem, removeItem, pushToa
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <div className="filter-row">
+            <label>
+              Categoria
+              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                {categories.map((category) => (
+                  <option key={category}>{category}</option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           {loading ? <p className="muted">Cargando...</p> : null}
+          {!loading && error ? <p className="error-text">{error}</p> : null}
           {!loading && filtered.length === 0 ? <p className="muted">No hay resultados.</p> : null}
           <div className="card-list">
             {filtered.map((item) => (

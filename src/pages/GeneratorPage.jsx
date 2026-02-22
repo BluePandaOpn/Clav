@@ -1,11 +1,12 @@
-import React, { useState } from "react";
+import React from "react";
 import { Copy, RefreshCw, WandSparkles } from "lucide-react";
 import PasswordStrength from "../components/PasswordStrength.jsx";
 import { api } from "../utils/api.js";
+import { useLocalStorage } from "../hooks/useLocalStorage.js";
 
 export default function GeneratorPage({ setGeneratedPassword, pushToast }) {
-  const [password, setPassword] = useState("");
-  const [options, setOptions] = useState({
+  const [password, setPassword] = useLocalStorage("generator_last_password", "");
+  const [options, setOptions] = useLocalStorage("generator_options", {
     length: 16,
     lowercase: true,
     uppercase: true,

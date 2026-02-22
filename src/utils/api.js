@@ -1,4 +1,5 @@
 const JSON_HEADERS = { "Content-Type": "application/json" };
+const API_BASE = import.meta.env.VITE_API_BASE || "/api/v1/dev-local-vault-route-29af4c8e71b5";
 
 async function request(path, options = {}) {
   const res = await fetch(path, options);
@@ -11,26 +12,49 @@ async function request(path, options = {}) {
 export const api = {
   async listCredentials(q = "") {
     const query = q ? `?q=${encodeURIComponent(q)}` : "";
-    return request(`/api/credentials${query}`);
+    return request(`${API_BASE}/credentials${query}`);
   },
   async createCredential(payload) {
-    return request("/api/credentials", {
+    return request(`${API_BASE}/credentials`, {
       method: "POST",
       headers: JSON_HEADERS,
       body: JSON.stringify(payload)
     });
   },
   async deleteCredential(id) {
-    return request(`/api/credentials/${id}`, { method: "DELETE" });
+    return request(`${API_BASE}/credentials/${id}`, { method: "DELETE" });
   },
   async clearCredentials() {
-    return request("/api/credentials", { method: "DELETE" });
+    return request(`${API_BASE}/credentials`, { method: "DELETE" });
   },
   async generatePassword(payload) {
-    return request("/api/generate", {
+    return request(`${API_BASE}/generate`, {
       method: "POST",
       headers: JSON_HEADERS,
       body: JSON.stringify(payload)
     });
+  },
+  async createQrChallenge(payload) {
+    return request(`${API_BASE}/qr/challenge`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async getQrChallengeStatus(id) {
+    return request(`${API_BASE}/qr/challenge/${id}`);
+  },
+  async approveQr(payload) {
+    return request(`${API_BASE}/qr/approve`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async listTrustedDevices() {
+    return request(`${API_BASE}/devices`);
+  },
+  async listAuditLogs(limit = 60) {
+    return request(`${API_BASE}/audit?limit=${encodeURIComponent(limit)}`);
   }
 };

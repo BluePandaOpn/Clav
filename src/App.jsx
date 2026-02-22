@@ -1,16 +1,21 @@
 import React, { useMemo, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import AppShell from "./components/AppShell.jsx";
+import MasterPasswordGate from "./components/MasterPasswordGate.jsx";
 import ToastStack from "./components/ToastStack.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import VaultPage from "./pages/VaultPage.jsx";
 import GeneratorPage from "./pages/GeneratorPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
+import UnlockQrPage from "./pages/UnlockQrPage.jsx";
 import { useCredentials } from "./hooks/useCredentials.js";
 import { useToasts } from "./hooks/useToasts.js";
+import { useVaultSecurity } from "./hooks/useVaultSecurity.js";
 
 export default function App() {
-  const { items, loading, error, addItem, removeItem, clearAll, refresh } = useCredentials();
+  const location = useLocation();
+  const security = useVaultSecurity();
+  const { items, loading, error, addItem, removeItem, clearAll, refresh } = useCredentials(security);
   const { toasts, pushToast, removeToast } = useToasts();
   const [generatedPassword, setGeneratedPassword] = useState("");
 
@@ -34,8 +39,33 @@ export default function App() {
     refresh,
     pushToast,
     generatedPassword,
-    setGeneratedPassword
+    setGeneratedPassword,
+    security
   };
+
+  if (location.pathname === "/unlock-qr") {
+    return (
+      <>
+        <Routes>
+          <Route path="/unlock-qr" element={<UnlockQrPage pushToast={pushToast} />} />
+        </Routes>
+        <ToastStack items={toasts} onClose={removeToast} />
+      </>
+    );
+  }
+
+  if (!security.isUnlocked) {
+    return (
+      <>
+        <MasterPasswordGate
+          isConfigured={security.isConfigured}
+          onUnlock={security.unlock}
+          onSetup={security.setupMasterPassword}
+        />
+        <ToastStack items={toasts} onClose={removeToast} />
+      </>
+    );
+  }
 
   return (
     <AppShell>
