@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { decryptWithLayers, encryptWithLayers } from "./multilayer-crypto.js";
@@ -8,33 +8,173 @@ import { createHybridSharePackage } from "./hybrid-share.js";
 import { checkPasswordBreach } from "./breach-detection.js";
 import { config } from "./config.js";
 
-const DB_FILE = new URL("./data/vault.json", import.meta.url);
-const DB_FILE_PATH = fileURLToPath(DB_FILE);
+const LEGACY_DB_FILE = new URL("./data/vault.json", import.meta.url);
+const LEGACY_DB_FILE_PATH = fileURLToPath(LEGACY_DB_FILE);
+const SHARD_DIR = fileURLToPath(new URL("./data/shards", import.meta.url));
+const METADATA_FILE_PATH = join(SHARD_DIR, "metadata.json");
+const ENTRIES_FILE_PATH = join(SHARD_DIR, "entries.json");
+const CRYPTO_FILE_PATH = join(SHARD_DIR, "crypto.json");
 const MAX_HISTORY_ENTRIES = 50;
 
 async function ensureStore() {
-  const dir = dirname(DB_FILE_PATH);
-  await mkdir(dir, { recursive: true });
-  try {
-    await readFile(DB_FILE_PATH, "utf8");
-  } catch {
-    await writeFile(
-      DB_FILE_PATH,
-      JSON.stringify({ credentials: [], trustedDevices: [], auditLogs: [] }, null, 2),
-      "utf8"
-    );
+  await mkdir(dirname(LEGACY_DB_FILE_PATH), { recursive: true });
+  await mkdir(SHARD_DIR, { recursive: true });
+
+  const hasAnyShard = await anyShardExists();
+  if (!hasAnyShard) {
+    const legacy = await readLegacyStoreIfExists();
+    const seed = normalizeStore(legacy || { credentials: [], trustedDevices: [], auditLogs: [] });
+    await writeShardsFromStore(seed, null);
+    return;
+  }
+
+  const entries = await readJsonSafe(ENTRIES_FILE_PATH, { credentials: [], trustedDevices: [], auditLogs: [] });
+  const crypto = await readJsonSafe(CRYPTO_FILE_PATH, { credentials: [] });
+  const metadata = await readJsonSafe(METADATA_FILE_PATH, null);
+
+  if (!(await fileExists(ENTRIES_FILE_PATH))) {
+    await atomicWriteJson(ENTRIES_FILE_PATH, entries);
+  }
+  if (!(await fileExists(CRYPTO_FILE_PATH))) {
+    await atomicWriteJson(CRYPTO_FILE_PATH, crypto);
+  }
+  if (!(await fileExists(METADATA_FILE_PATH))) {
+    await atomicWriteJson(METADATA_FILE_PATH, buildMetadata(entries, crypto, metadata));
   }
 }
 
 export async function readStore() {
   await ensureStore();
-  const raw = await readFile(DB_FILE_PATH, "utf8");
-  return normalizeStore(JSON.parse(raw));
+  return readCombinedFromShards();
 }
 
 export async function writeStore(data) {
   await ensureStore();
-  await writeFile(DB_FILE_PATH, JSON.stringify(normalizeStore(data), null, 2), "utf8");
+  await writeShardsFromStore(normalizeStore(data), await readMetadataSafe());
+}
+
+async function readCombinedFromShards() {
+  const entriesShard = await readJsonSafe(ENTRIES_FILE_PATH, { credentials: [], trustedDevices: [], auditLogs: [] });
+  const cryptoShard = await readJsonSafe(CRYPTO_FILE_PATH, { credentials: [] });
+  const entriesList = Array.isArray(entriesShard.credentials) ? entriesShard.credentials : [];
+  const cryptoMap = new Map();
+
+  const cryptoList = Array.isArray(cryptoShard.credentials) ? cryptoShard.credentials : [];
+  for (const crypto of cryptoList) {
+    if (!crypto?.id) continue;
+    cryptoMap.set(crypto.id, crypto);
+  }
+
+  const credentials = entriesList.map((entry) => {
+    const crypto = cryptoMap.get(entry.id) || {};
+    return {
+      ...entry,
+      passwordEnc: crypto.passwordEnc,
+      signature: crypto.signature || null,
+      passwordHistory: Array.isArray(crypto.passwordHistory) ? crypto.passwordHistory : []
+    };
+  });
+
+  return normalizeStore({
+    credentials,
+    trustedDevices: Array.isArray(entriesShard.trustedDevices) ? entriesShard.trustedDevices : [],
+    auditLogs: Array.isArray(entriesShard.auditLogs) ? entriesShard.auditLogs : []
+  });
+}
+
+async function writeShardsFromStore(store, previousMetadata) {
+  const credentials = Array.isArray(store.credentials) ? store.credentials : [];
+  const entryCredentials = credentials.map((item) => {
+    const entry = { ...item };
+    delete entry.passwordEnc;
+    delete entry.signature;
+    delete entry.passwordHistory;
+    return entry;
+  });
+  const cryptoCredentials = credentials.map((item) => ({
+    id: item.id,
+    passwordEnc: item.passwordEnc,
+    signature: item.signature || null,
+    passwordHistory: Array.isArray(item.passwordHistory) ? item.passwordHistory : []
+  }));
+
+  const entriesShard = {
+    credentials: entryCredentials,
+    trustedDevices: Array.isArray(store.trustedDevices) ? store.trustedDevices : [],
+    auditLogs: Array.isArray(store.auditLogs) ? store.auditLogs : []
+  };
+  const cryptoShard = {
+    credentials: cryptoCredentials
+  };
+  const metadataShard = buildMetadata(entriesShard, cryptoShard, previousMetadata);
+
+  await Promise.all([
+    atomicWriteJson(ENTRIES_FILE_PATH, entriesShard),
+    atomicWriteJson(CRYPTO_FILE_PATH, cryptoShard),
+    atomicWriteJson(METADATA_FILE_PATH, metadataShard)
+  ]);
+}
+
+function buildMetadata(entriesShard, cryptoShard, previousMetadata) {
+  const now = new Date().toISOString();
+  const prev = previousMetadata && typeof previousMetadata === "object" ? previousMetadata : {};
+  return {
+    schemaVersion: "3.2.0",
+    shardMode: "metadata-crypto-entries",
+    createdAt: prev.createdAt || now,
+    updatedAt: now,
+    stats: {
+      credentialsEntries: Array.isArray(entriesShard.credentials) ? entriesShard.credentials.length : 0,
+      credentialsCrypto: Array.isArray(cryptoShard.credentials) ? cryptoShard.credentials.length : 0,
+      trustedDevices: Array.isArray(entriesShard.trustedDevices) ? entriesShard.trustedDevices.length : 0,
+      auditLogs: Array.isArray(entriesShard.auditLogs) ? entriesShard.auditLogs.length : 0
+    }
+  };
+}
+
+async function readMetadataSafe() {
+  return readJsonSafe(METADATA_FILE_PATH, null);
+}
+
+async function readLegacyStoreIfExists() {
+  try {
+    const raw = await readFile(LEGACY_DB_FILE_PATH, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function anyShardExists() {
+  return (
+    (await fileExists(METADATA_FILE_PATH)) ||
+    (await fileExists(ENTRIES_FILE_PATH)) ||
+    (await fileExists(CRYPTO_FILE_PATH))
+  );
+}
+
+async function fileExists(path) {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readJsonSafe(path, fallback) {
+  try {
+    const raw = await readFile(path, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+async function atomicWriteJson(path, value) {
+  const tmp = `${path}.tmp`;
+  await writeFile(tmp, JSON.stringify(value, null, 2), "utf8");
+  await rename(tmp, path);
 }
 
 export async function listCredentials(query = "") {
@@ -77,6 +217,7 @@ export async function createCredential(payload) {
     isHoney: Boolean(payload.isHoney),
     honeyTag: payload.honeyTag || "",
     honeyLastTriggeredAt: null,
+    crdt: resolveIncomingCrdt(payload._crdt),
     passwordVersion: 1,
     passwordHistory: [],
     changeLog: [
@@ -104,6 +245,11 @@ export async function updateCredential(id, payload) {
   const index = db.credentials.findIndex((item) => item.id === id);
   if (index === -1) return null;
   const existing = db.credentials[index];
+  const existingCrdt = normalizeCrdt(existing.crdt);
+  const incomingCrdt = resolveIncomingCrdt(payload._crdt);
+  if (compareCrdt(existingCrdt, incomingCrdt) >= 0) {
+    return materializeCredential(existing);
+  }
   const hasPasswordChange = typeof payload.password === "string" && payload.password.length > 0;
   const passwordEnc = hasPasswordChange ? encryptWithLayers(payload.password, id) : existing.passwordEnc;
   const fieldsChanged = getChangedFields(existing, payload, hasPasswordChange);
@@ -146,6 +292,7 @@ export async function updateCredential(id, payload) {
     isHoney: typeof payload.isHoney === "boolean" ? payload.isHoney : Boolean(existing.isHoney),
     honeyTag: payload.honeyTag ?? existing.honeyTag ?? "",
     honeyLastTriggeredAt: existing.honeyLastTriggeredAt || null,
+    crdt: incomingCrdt,
     passwordVersion: nextVersion,
     passwordHistory: nextHistory,
     changeLog: nextChangeLog,
@@ -247,6 +394,7 @@ export async function generateHoneyCredentials(count = 3) {
       isHoney: true,
       honeyTag: "v0.1.4",
       honeyLastTriggeredAt: null,
+      crdt: makeServerCrdt(),
       passwordVersion: 1,
       passwordHistory: [],
       changeLog: [
@@ -281,6 +429,7 @@ export async function registerHoneyCredentialAccess(credentialId, action, meta =
 
   const updated = {
     ...current,
+    crdt: makeServerCrdt(),
     honeyLastTriggeredAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -326,6 +475,7 @@ export async function refreshCredentialBreachStatus(credentialId) {
 
   db.credentials[index] = {
     ...target,
+    crdt: makeServerCrdt(),
     breachStatus
   };
   await writeStore(db);
@@ -354,6 +504,7 @@ export async function scanAllCredentialsForBreaches() {
     }
     db.credentials[i] = {
       ...item,
+      crdt: makeServerCrdt(),
       breachStatus
     };
     const materialized = materializeCredential(db.credentials[i]);
@@ -575,6 +726,7 @@ function materializeCredential(item) {
     isHoney: Boolean(item.isHoney),
     honeyTag: item.honeyTag || "",
     honeyLastTriggeredAt: item.honeyLastTriggeredAt || null,
+    crdt: normalizeCrdt(item.crdt),
     passwordVersion: Number(item.passwordVersion || 1),
     previousVersionCount: Array.isArray(item.passwordHistory) ? item.passwordHistory.length : 0,
     breachStatus: item.breachStatus || null,
@@ -612,4 +764,44 @@ function getChangedFields(existing, payload, hasPasswordChange) {
     changed.push("isSensitive");
   }
   return changed;
+}
+
+function makeServerCrdt() {
+  const nowMs = Date.now();
+  return {
+    clientId: "server",
+    counter: nowMs,
+    ts: new Date(nowMs).toISOString()
+  };
+}
+
+function resolveIncomingCrdt(value) {
+  const normalized = normalizeCrdt(value);
+  if (normalized.counter > 0) return normalized;
+  return makeServerCrdt();
+}
+
+function normalizeCrdt(value) {
+  const fallback = { clientId: "unknown", counter: 0, ts: new Date(0).toISOString() };
+  if (!value || typeof value !== "object") return fallback;
+  const clientId = String(value.clientId || "unknown");
+  const counter = Number(value.counter || 0);
+  const tsRaw = String(value.ts || "");
+  const ts = Number.isNaN(Date.parse(tsRaw)) ? fallback.ts : new Date(tsRaw).toISOString();
+  return {
+    clientId,
+    counter: Number.isFinite(counter) ? counter : 0,
+    ts
+  };
+}
+
+function compareCrdt(a, b) {
+  const left = normalizeCrdt(a);
+  const right = normalizeCrdt(b);
+  if (left.counter !== right.counter) return left.counter - right.counter;
+  const leftTs = Date.parse(left.ts);
+  const rightTs = Date.parse(right.ts);
+  if (leftTs !== rightTs) return leftTs - rightTs;
+  if (left.clientId === right.clientId) return 0;
+  return left.clientId > right.clientId ? 1 : -1;
 }

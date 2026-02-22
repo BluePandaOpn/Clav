@@ -25,9 +25,11 @@ import {
 } from "./store.js";
 import { generatePassword, getStrength } from "./password.js";
 import { approveQrChallenge, createQrChallenge, getQrChallengeStatus } from "./qr-unlock.js";
+import { createSyncHub } from "./sync-hub.js";
 
 const app = express();
 const api = express.Router();
+const syncHub = createSyncHub();
 const asyncHandler =
   (fn) =>
   (req, res, next) =>
@@ -71,6 +73,10 @@ api.get(
   })
 );
 
+api.get("/sync/events", (req, res) => {
+  syncHub.registerSseClient(req, res);
+});
+
 api.post(
   "/credentials",
   asyncHandler(async (req, res) => {
@@ -94,6 +100,10 @@ api.post(
       userAgent: getUa(req)
     });
   }
+  syncHub.publish({
+    type: "credential.upsert",
+    item
+  });
   return res.status(201).json({ item });
   })
 );
@@ -114,6 +124,10 @@ api.put(
       userAgent: getUa(req)
     });
   }
+  syncHub.publish({
+    type: "credential.upsert",
+    item: updated
+  });
   return res.json({ item: updated });
   })
 );
@@ -142,6 +156,10 @@ api.delete(
     ip: getIp(req),
     userAgent: getUa(req)
   });
+  syncHub.publish({
+    type: "credential.delete",
+    id: req.params.id
+  });
   return res.status(204).send();
   })
 );
@@ -150,6 +168,9 @@ api.delete(
   "/credentials",
   asyncHandler(async (_req, res) => {
   await clearCredentials();
+  syncHub.publish({
+    type: "credential.clear"
+  });
   res.status(204).send();
   })
 );
@@ -289,6 +310,10 @@ api.post(
       ip: getIp(req),
       userAgent: getUa(req)
     });
+    syncHub.publish({
+      type: "credential.batch_upsert",
+      items
+    });
     return res.status(201).json({ items });
   })
 );
@@ -307,6 +332,12 @@ api.post(
     });
     if (!data) {
       return res.status(404).json({ error: "honey credential not found" });
+    }
+    if (data.item) {
+      syncHub.publish({
+        type: "credential.upsert",
+        item: data.item
+      });
     }
     return res.status(201).json(data);
   })
@@ -327,6 +358,10 @@ api.post(
         userAgent: getUa(req)
       });
     }
+    syncHub.publish({
+      type: "credential.upsert",
+      item
+    });
     return res.json({ item });
   })
 );
@@ -349,6 +384,10 @@ api.post(
         userAgent: getUa(req)
       });
     }
+    syncHub.publish({
+      type: "credential.batch_upsert",
+      items: result.items
+    });
     return res.json(result);
   })
 );
@@ -420,6 +459,7 @@ app.use((error, _req, res) => {
 const server = app.listen(config.port, () => {
   console.log(`API running on http://localhost:${config.port}${config.apiBasePath}`);
 });
+syncHub.attachWebSocketServer(server, `${config.apiBasePath}/sync/ws`);
 
 server.on("error", (error) => {
   if (error?.code === "EADDRINUSE") {

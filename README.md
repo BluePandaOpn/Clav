@@ -23,6 +23,8 @@ Gestor de passwords profesional con:
 - Modo presentacion (0.2.3): oculta datos sensibles al compartir pantalla
 - Historial de versiones (2.4): fecha de creacion, cambios y versiones anteriores por credencial
 - Auditoria visual (2.5): graficos de contrasenas debiles, duplicadas y antiguas
+- Sharding del vault (3.2): separacion fisica en metadatos, cifrado y entradas
+- Sincronizacion entre dispositivos (3.3): SSE + WebSockets + CRDT LWW
 
 ## Requisitos
 

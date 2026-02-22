@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../utils/api.js";
+import { API_BASE } from "../utils/api.js";
 
 export function useCredentials(security) {
   const isUnlocked = Boolean(security?.isUnlocked);
@@ -8,6 +9,16 @@ export function useCredentials(security) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const seenSyncIds = useRef(new Set());
+  const clientId = useMemo(() => {
+    const key = "vault_sync_client_id_v033";
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const created = crypto.randomUUID();
+    localStorage.setItem(key, created);
+    return created;
+  }, []);
+  const counterRef = useRef(Number(localStorage.getItem(`vault_sync_counter_${clientId}`) || "0"));
 
   const refresh = useCallback(async () => {
     if (!isUnlocked) return;
@@ -35,8 +46,83 @@ export function useCredentials(security) {
     refresh();
   }, [isUnlocked, refresh]);
 
+  useEffect(() => {
+    if (!isUnlocked) return undefined;
+
+    const onEvent = (raw) => {
+      let event;
+      try {
+        event = typeof raw === "string" ? JSON.parse(raw) : raw;
+      } catch {
+        return;
+      }
+      if (!event?.id) return;
+      if (seenSyncIds.current.has(event.id)) return;
+      seenSyncIds.current.add(event.id);
+      if (seenSyncIds.current.size > 400) {
+        const first = seenSyncIds.current.values().next().value;
+        if (first) seenSyncIds.current.delete(first);
+      }
+
+      if (event.type === "credential.upsert" && event.item) {
+        setItems((prev) => {
+          const idx = prev.findIndex((item) => item.id === event.item.id);
+          const next = idx === -1 ? [event.item, ...prev] : prev.map((item) => (item.id === event.item.id ? event.item : item));
+          saveEncryptedVault?.(next);
+          return next;
+        });
+        return;
+      }
+
+      if (event.type === "credential.batch_upsert" && Array.isArray(event.items)) {
+        setItems((prev) => {
+          const map = new Map(prev.map((item) => [item.id, item]));
+          for (const incoming of event.items) {
+            if (!incoming?.id) continue;
+            map.set(incoming.id, incoming);
+          }
+          const next = Array.from(map.values()).sort((a, b) => Date.parse(b.updatedAt || 0) - Date.parse(a.updatedAt || 0));
+          saveEncryptedVault?.(next);
+          return next;
+        });
+        return;
+      }
+
+      if (event.type === "credential.delete" && event.id) {
+        setItems((prev) => {
+          const next = prev.filter((item) => item.id !== event.id);
+          saveEncryptedVault?.(next);
+          return next;
+        });
+        return;
+      }
+
+      if (event.type === "credential.clear") {
+        setItems([]);
+        saveEncryptedVault?.([]);
+      }
+    };
+
+    const sse = new EventSource(`${API_BASE}/sync/events`);
+    sse.addEventListener("sync", (evt) => onEvent(evt.data));
+
+    const wsUrl = buildWebSocketUrl();
+    const ws = wsUrl ? new WebSocket(wsUrl) : null;
+    if (ws) {
+      ws.onmessage = (evt) => onEvent(evt.data);
+    }
+
+    return () => {
+      sse.close();
+      ws?.close();
+    };
+  }, [isUnlocked, saveEncryptedVault]);
+
   const addItem = useCallback(async (payload) => {
-    const data = await api.createCredential(payload);
+    const data = await api.createCredential({
+      ...payload,
+      _crdt: nextCrdt(clientId, counterRef)
+    });
     setItems((prev) => {
       const next = [data.item, ...prev];
       saveEncryptedVault?.(next);
@@ -121,4 +207,22 @@ export function useCredentials(security) {
     scanCredentialBreaches,
     getCredentialHistory
   };
+}
+
+function nextCrdt(clientId, counterRef) {
+  const next = Number(counterRef.current || 0) + 1;
+  counterRef.current = next;
+  localStorage.setItem(`vault_sync_counter_${clientId}`, String(next));
+  return {
+    clientId,
+    counter: next,
+    ts: new Date().toISOString()
+  };
+}
+
+function buildWebSocketUrl() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const hostname = window.location.hostname || "localhost";
+  const defaultPort = "4000";
+  return `${protocol}//${hostname}:${defaultPort}${API_BASE}/sync/ws`;
 }

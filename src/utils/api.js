@@ -1,5 +1,5 @@
 const JSON_HEADERS = { "Content-Type": "application/json" };
-const API_BASE = import.meta.env.VITE_API_BASE || "/api/v1/dev-local-vault-route-29af4c8e71b5";
+export const API_BASE = import.meta.env.VITE_API_BASE || "/api/v1/dev-local-vault-route-29af4c8e71b5";
 
 async function request(path, options = {}) {
   const res = await fetch(path, options);

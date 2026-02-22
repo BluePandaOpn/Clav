@@ -83,6 +83,30 @@ Fecha: 2026-02-22
   - Contrasenas antiguas (+180 dias).
 - Incluye detalle de grupos duplicados y top credenciales antiguas.
 
+## 3.2 - Sharding del vault
+
+- Persistencia dividida en tres shards fisicos:
+  - `server/data/shards/metadata.json`
+  - `server/data/shards/entries.json`
+  - `server/data/shards/crypto.json`
+- Migracion automatica desde `server/data/vault.json` al primer arranque.
+- Si un shard se pierde/corrompe, los otros shards se mantienen aislados para reducir impacto.
+
+## 3.3 - Sincronizacion entre dispositivos
+
+- Transporte en tiempo real por:
+  - EventSource (`GET /sync/events`)
+  - WebSockets (`/sync/ws`)
+- Publicacion de eventos de vault:
+  - `credential.upsert`
+  - `credential.batch_upsert`
+  - `credential.delete`
+  - `credential.clear`
+- Resolucion de conflictos con CRDT tipo LWW (Last-Write-Wins) por credencial:
+  - `counter`
+  - `ts`
+  - `clientId`
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).
