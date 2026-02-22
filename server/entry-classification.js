@@ -2,7 +2,8 @@ const ENTRY_TYPES = {
   LOGIN: "LOGIN",
   CREDIT_CARD: "CREDIT_CARD",
   SECURE_NOTE: "SECURE_NOTE",
-  API_KEY: "API_KEY"
+  API_KEY: "API_KEY",
+  SSH_KEY: "SSH_KEY"
 };
 
 export function classifyEntryType({ service = "", username = "", password = "", notes = "" } = {}) {
@@ -12,6 +13,9 @@ export function classifyEntryType({ service = "", username = "", password = "", 
   const notesText = String(notes || "");
   const merged = `${serviceText} ${usernameText} ${notesText}`.toLowerCase();
 
+  if (looksLikeSshKey(passwordText, merged)) {
+    return ENTRY_TYPES.SSH_KEY;
+  }
   if (looksLikeApiKey(passwordText, merged)) {
     return ENTRY_TYPES.API_KEY;
   }
@@ -42,6 +46,16 @@ function looksLikeApiKey(password, mergedText) {
 
   if (/(api|token|secret|bearer|access key|api key|pat|private key)/i.test(mergedText)) {
     if (/^[A-Za-z0-9_.=:+/-]{20,}$/.test(value)) return true;
+  }
+  return false;
+}
+
+function looksLikeSshKey(password, mergedText) {
+  const value = String(password || "");
+  if (value.includes("BEGIN OPENSSH PRIVATE KEY")) return true;
+  if (value.includes("BEGIN PRIVATE KEY")) return true;
+  if (/(\bssh\b|\bopenssh\b|\bprivate key\b)/i.test(mergedText)) {
+    return value.length > 32;
   }
   return false;
 }

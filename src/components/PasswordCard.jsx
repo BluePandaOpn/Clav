@@ -15,6 +15,7 @@ export default function PasswordCard({
   const travelLocked = Boolean(travelModeActive && item.isSensitive);
   const presentationLocked = Boolean(presentationModeEnabled);
   const entryTypeLabel = getEntryTypeLabel(item.entryType);
+  const rotationLabel = getRotationLabel(item.rotationPolicy);
 
   const toggleReveal = () => {
     if (travelLocked || presentationLocked) {
@@ -38,6 +39,7 @@ export default function PasswordCard({
         </div>
         <div className="inline-actions">
           <span className="badge type-badge">{entryTypeLabel}</span>
+          {rotationLabel ? <span className="badge rotation-badge">{rotationLabel}</span> : null}
           {item.isHoney ? (
             <span className="badge honey-badge">
               <AlertTriangle size={12} /> Honey
@@ -93,7 +95,18 @@ function getEntryTypeLabel(type) {
       return "Nota segura";
     case "API_KEY":
       return "API key";
+    case "SSH_KEY":
+      return "SSH key";
     default:
       return "Login";
   }
+}
+
+function getRotationLabel(policy) {
+  if (!policy?.supported) return "";
+  if (!policy.enabled) return "Rotacion off";
+  if (!policy.nextRotationAt) return "Rotacion activa";
+  const due = Date.parse(policy.nextRotationAt) <= Date.now();
+  if (due) return "Rotacion vencida";
+  return `Rotacion ${new Date(policy.nextRotationAt).toLocaleDateString("es-ES")}`;
 }

@@ -28,6 +28,7 @@ Gestor de passwords profesional con:
 - Backups automaticos cifrados (3.4): locales, nube y exportacion programada
 - Generador de contrasenas inteligente (4.1): deteccion de requisitos de sitio y politica
 - Clasificacion automatica (4.2): login, tarjeta de credito, nota segura y API key
+- Auto-rotacion de credenciales (4.3): GitHub tokens, API keys y SSH keys con politica por entrada
 
 ## Requisitos
 
@@ -114,6 +115,8 @@ Prefix: `/api/v1/<API_NAMESPACE>`
 - `GET /credentials`
 - `POST /credentials`
 - `GET /credentials/:id/history`
+- `PUT /credentials/:id/rotation-policy`
+- `POST /credentials/:id/rotate`
 - `PUT /credentials/:id`
 - `DELETE /credentials/:id`
 - `DELETE /credentials`
@@ -134,6 +137,8 @@ Prefix: `/api/v1/<API_NAMESPACE>`
 - `GET /backup/config`
 - `GET /backup/local`
 - `POST /backup/run`
+- `GET /rotation/due`
+- `POST /rotation/run-due`
 
 Endpoint publico de vida:
 - `GET /healthz`

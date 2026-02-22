@@ -8,6 +8,13 @@ import { createHybridSharePackage } from "./hybrid-share.js";
 import { checkPasswordBreach } from "./breach-detection.js";
 import { config } from "./config.js";
 import { classifyEntryType } from "./entry-classification.js";
+import {
+  buildRotationPolicy,
+  buildSshRotationNotes,
+  computeNextRotationAt,
+  createRotationMaterial,
+  isRotationDue
+} from "./auto-rotation.js";
 
 const LEGACY_DB_FILE = new URL("./data/vault.json", import.meta.url);
 const LEGACY_DB_FILE_PATH = fileURLToPath(LEGACY_DB_FILE);
@@ -208,6 +215,17 @@ export async function createCredential(payload) {
   const id = randomUUID();
   const passwordEnc = encryptWithLayers(payload.password, id);
   const entryType = payload.entryType || classifyEntryType(payload);
+  const rotationPolicy = buildRotationPolicy({
+    existing: null,
+    incoming: payload.rotationPolicy,
+    credential: {
+      service: payload.service,
+      username: payload.username || "",
+      notes: payload.notes || "",
+      password: payload.password,
+      entryType
+    }
+  });
   const unsignedItem = {
     id,
     service: payload.service,
@@ -216,6 +234,7 @@ export async function createCredential(payload) {
     category: payload.category || "General",
     notes: payload.notes || "",
     entryType,
+    rotationPolicy,
     isSensitive: Boolean(payload.isSensitive),
     isHoney: Boolean(payload.isHoney),
     honeyTag: payload.honeyTag || "",
@@ -227,7 +246,7 @@ export async function createCredential(payload) {
       {
         at: now,
         type: "CREATED",
-        fields: ["service", "username", "password", "category", "notes", "isSensitive"]
+        fields: ["service", "username", "password", "category", "notes", "isSensitive", "entryType", "rotationPolicy"]
       }
     ],
     breachStatus: payload.breachStatus || null,
@@ -296,6 +315,23 @@ export async function updateCredential(id, payload) {
       notes: nextNotes,
       password: nextPassword
     });
+  const rotationPolicy = buildRotationPolicy({
+    existing: existing.rotationPolicy,
+    incoming: payload.rotationPolicy,
+    credential: {
+      service: nextService,
+      username: nextUsername,
+      notes: nextNotes,
+      password: nextPassword,
+      entryType
+    }
+  });
+  if (entryType !== existing.entryType && !fieldsChanged.includes("entryType")) {
+    fieldsChanged.push("entryType");
+  }
+  if (hasRotationPolicyChanged(existing.rotationPolicy, rotationPolicy) && !fieldsChanged.includes("rotationPolicy")) {
+    fieldsChanged.push("rotationPolicy");
+  }
 
   const updatedItem = {
     ...existing,
@@ -304,6 +340,7 @@ export async function updateCredential(id, payload) {
     category: payload.category ?? existing.category,
     notes: nextNotes,
     entryType,
+    rotationPolicy,
     isSensitive:
       typeof payload.isSensitive === "boolean" ? payload.isSensitive : Boolean(existing.isSensitive),
     isHoney: typeof payload.isHoney === "boolean" ? payload.isHoney : Boolean(existing.isHoney),
@@ -365,6 +402,167 @@ export async function getCredentialHistory(credentialId) {
     currentVersion: Number(item.passwordVersion || 1),
     changes: Array.isArray(item.changeLog) ? item.changeLog : [],
     previousVersions
+  };
+}
+
+export async function updateCredentialRotationPolicy(id, payload = {}) {
+  const db = await readStore();
+  const index = db.credentials.findIndex((item) => item.id === id);
+  if (index === -1) return null;
+  const existing = db.credentials[index];
+  const password = decryptSafe(existing.passwordEnc, existing.id);
+  const rotationPolicy = buildRotationPolicy({
+    existing: existing.rotationPolicy,
+    incoming: payload,
+    credential: {
+      service: existing.service,
+      username: existing.username || "",
+      notes: existing.notes || "",
+      password,
+      entryType: existing.entryType
+    }
+  });
+
+  if (hasRotationPolicyChanged(existing.rotationPolicy, rotationPolicy)) {
+    const now = new Date().toISOString();
+    const updated = {
+      ...existing,
+      rotationPolicy,
+      crdt: makeServerCrdt(),
+      changeLog: [
+        {
+          at: now,
+          type: "UPDATED",
+          fields: ["rotationPolicy"]
+        },
+        ...(Array.isArray(existing.changeLog) ? existing.changeLog : [])
+      ].slice(0, MAX_HISTORY_ENTRIES),
+      updatedAt: now
+    };
+    db.credentials[index] = {
+      ...updated,
+      signature: signCredentialEntry(updated)
+    };
+    await writeStore(db);
+  }
+
+  return materializeCredential(db.credentials[index]);
+}
+
+export async function rotateCredentialSecret(credentialId, reason = "manual") {
+  const db = await readStore();
+  const index = db.credentials.findIndex((item) => item.id === credentialId);
+  if (index === -1) return null;
+  const existing = db.credentials[index];
+  if (existing.signature && !verifyCredentialEntry(existing)) {
+    const err = new Error("Credential signature invalid. Rotation blocked.");
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const currentPassword = decryptSafe(existing.passwordEnc, existing.id);
+  const basePolicy = buildRotationPolicy({
+    existing: existing.rotationPolicy,
+    incoming: null,
+    credential: {
+      service: existing.service,
+      username: existing.username || "",
+      notes: existing.notes || "",
+      password: currentPassword,
+      entryType: existing.entryType
+    }
+  });
+  if (!basePolicy.supported) {
+    const err = new Error("Credential type does not support automatic rotation.");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const now = new Date().toISOString();
+  const material = createRotationMaterial(basePolicy.kind, existing.service);
+  const nextPassword = material.password;
+  const nextNotes =
+    basePolicy.kind === "SSH_KEY"
+      ? buildSshRotationNotes(existing.notes || "", material.metadata, now)
+      : existing.notes || "";
+
+  const nextPolicy = {
+    ...basePolicy,
+    lastRotatedAt: now,
+    nextRotationAt: computeNextRotationAt(now, basePolicy.intervalDays),
+    lastRotationStatus: "success",
+    lastRotationError: null
+  };
+  const baseVersion = Number(existing.passwordVersion || 1);
+  const updated = {
+    ...existing,
+    notes: nextNotes,
+    passwordEnc: encryptWithLayers(nextPassword, existing.id),
+    passwordVersion: baseVersion + 1,
+    passwordHistory: [
+      {
+        version: baseVersion,
+        passwordEnc: existing.passwordEnc,
+        changedAt: now
+      },
+      ...(Array.isArray(existing.passwordHistory) ? existing.passwordHistory : [])
+    ].slice(0, MAX_HISTORY_ENTRIES),
+    rotationPolicy: nextPolicy,
+    crdt: makeServerCrdt(),
+    changeLog: [
+      {
+        at: now,
+        type: "ROTATED",
+        reason: String(reason || "manual"),
+        fields: nextNotes !== (existing.notes || "") ? ["password", "rotationPolicy", "notes"] : ["password", "rotationPolicy"]
+      },
+      ...(Array.isArray(existing.changeLog) ? existing.changeLog : [])
+    ].slice(0, MAX_HISTORY_ENTRIES),
+    updatedAt: now
+  };
+
+  db.credentials[index] = {
+    ...updated,
+    signature: signCredentialEntry(updated)
+  };
+  await writeStore(db);
+  const item = materializeCredential(db.credentials[index]);
+  return {
+    item,
+    rotation: {
+      kind: nextPolicy.kind,
+      rotatedAt: now,
+      nextRotationAt: nextPolicy.nextRotationAt,
+      metadata: material.metadata || {}
+    }
+  };
+}
+
+export async function rotateDueCredentials(limit = 25) {
+  const db = await readStore();
+  const nowTs = Date.now();
+  const dueIds = db.credentials
+    .filter((item) => isRotationDue(item.rotationPolicy, nowTs))
+    .slice(0, Math.max(1, Math.min(200, Number(limit) || 25)))
+    .map((item) => item.id);
+  const rotated = [];
+  const failed = [];
+
+  for (const id of dueIds) {
+    try {
+      const result = await rotateCredentialSecret(id, "auto_due");
+      if (result?.item) rotated.push(result.item);
+    } catch (error) {
+      failed.push({ id, error: error.message });
+    }
+  }
+
+  return {
+    totalDue: dueIds.length,
+    rotated: rotated.length,
+    failed: failed.length,
+    items: rotated,
+    errors: failed
   };
 }
 
@@ -740,6 +938,19 @@ function materializeCredential(item) {
     category: item.category || "General",
     notes: item.notes || "",
     entryType: item.entryType || classifyEntryType({ service: item.service, username: item.username, notes: item.notes, password }),
+    rotationPolicy:
+      item.rotationPolicy ||
+      buildRotationPolicy({
+        existing: null,
+        incoming: null,
+        credential: {
+          service: item.service,
+          username: item.username || "",
+          notes: item.notes || "",
+          password,
+          entryType: item.entryType
+        }
+      }),
     isSensitive: Boolean(item.isSensitive),
     isHoney: Boolean(item.isHoney),
     honeyTag: item.honeyTag || "",
@@ -779,10 +990,44 @@ function getChangedFields(existing, payload, hasPasswordChange) {
   if (typeof payload.category === "string" && payload.category !== existing.category) changed.push("category");
   if (typeof payload.notes === "string" && payload.notes !== existing.notes) changed.push("notes");
   if (typeof payload.entryType === "string" && payload.entryType !== existing.entryType) changed.push("entryType");
+  if (payload.rotationPolicy && hasRotationPolicyChanged(existing.rotationPolicy, payload.rotationPolicy)) {
+    changed.push("rotationPolicy");
+  }
   if (typeof payload.isSensitive === "boolean" && payload.isSensitive !== Boolean(existing.isSensitive)) {
     changed.push("isSensitive");
   }
   return changed;
+}
+
+function hasRotationPolicyChanged(existing, incoming) {
+  const left = normalizeRotationSnapshot(existing);
+  const right = normalizeRotationSnapshot(incoming);
+  return stableSerialize(left) !== stableSerialize(right);
+}
+
+function normalizeRotationSnapshot(value) {
+  const policy = value && typeof value === "object" ? value : {};
+  return {
+    supported: Boolean(policy.supported),
+    kind: String(policy.kind || "NONE"),
+    enabled: Boolean(policy.enabled),
+    intervalDays: Number(policy.intervalDays || 0),
+    lastRotatedAt: policy.lastRotatedAt ? String(policy.lastRotatedAt) : null,
+    nextRotationAt: policy.nextRotationAt ? String(policy.nextRotationAt) : null,
+    lastRotationStatus: policy.lastRotationStatus ? String(policy.lastRotationStatus) : null,
+    lastRotationError: policy.lastRotationError ? String(policy.lastRotationError) : null
+  };
+}
+
+function stableSerialize(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function decryptSafe(passwordEnc, id) {

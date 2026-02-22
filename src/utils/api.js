@@ -30,6 +30,30 @@ export const api = {
   async getCredentialHistory(id) {
     return request(`${API_BASE}/credentials/${id}/history`);
   },
+  async updateCredentialRotationPolicy(id, payload) {
+    return request(`${API_BASE}/credentials/${id}/rotation-policy`, {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async rotateCredential(id, payload = { reason: "manual" }) {
+    return request(`${API_BASE}/credentials/${id}/rotate`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async rotateDueCredentials(payload = { limit: 25 }) {
+    return request(`${API_BASE}/rotation/run-due`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async listRotationDue() {
+    return request(`${API_BASE}/rotation/due`);
+  },
   async generatePassword(payload) {
     return request(`${API_BASE}/generate`, {
       method: "POST",

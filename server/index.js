@@ -19,7 +19,10 @@ import {
   readStore,
   refreshCredentialBreachStatus,
   registerHoneyCredentialAccess,
+  rotateCredentialSecret,
+  rotateDueCredentials,
   scanAllCredentialsForBreaches,
+  updateCredentialRotationPolicy,
   upsertDeviceEncryptionKey,
   updateCredential
 } from "./store.js";
@@ -27,6 +30,7 @@ import { generatePassword, getStrength } from "./password.js";
 import { approveQrChallenge, createQrChallenge, getQrChallengeStatus } from "./qr-unlock.js";
 import { createSyncHub } from "./sync-hub.js";
 import { createBackupService } from "./backup-service.js";
+import { isRotationDue } from "./auto-rotation.js";
 
 const app = express();
 const api = express.Router();
@@ -110,11 +114,11 @@ api.get("/sync/events", (req, res) => {
 api.post(
   "/credentials",
   asyncHandler(async (req, res) => {
-  const { service, username, password, category, notes, isSensitive } = req.body || {};
+  const { service, username, password, category, notes, isSensitive, rotationPolicy } = req.body || {};
   if (!service || !password) {
     return res.status(400).json({ error: "service and password are required" });
   }
-  const created = await createCredential({ service, username, password, category, notes, isSensitive });
+  const created = await createCredential({ service, username, password, category, notes, isSensitive, rotationPolicy });
   const item = (await refreshCredentialBreachStatus(created.id)) || created;
   await addAuditLog({
     type: "CREDENTIAL_CREATED",
@@ -422,6 +426,82 @@ api.post(
   })
 );
 
+api.put(
+  "/credentials/:id/rotation-policy",
+  asyncHandler(async (req, res) => {
+    const item = await updateCredentialRotationPolicy(String(req.params.id), req.body || {});
+    if (!item) {
+      return res.status(404).json({ error: "credential not found" });
+    }
+    await addAuditLog({
+      type: "CREDENTIAL_ROTATION_POLICY_UPDATED",
+      detail: `${item.id}:${item.rotationPolicy?.kind || "NONE"}:${item.rotationPolicy?.enabled ? "enabled" : "disabled"}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    syncHub.publish({
+      type: "credential.upsert",
+      item
+    });
+    return res.json({ item });
+  })
+);
+
+api.post(
+  "/credentials/:id/rotate",
+  asyncHandler(async (req, res) => {
+    const reason = String(req.body?.reason || "manual");
+    const result = await rotateCredentialSecret(String(req.params.id), reason);
+    if (!result) {
+      return res.status(404).json({ error: "credential not found" });
+    }
+    await addAuditLog({
+      type: "CREDENTIAL_ROTATED",
+      detail: `${result.item.id}:${result.rotation.kind}:${reason}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    syncHub.publish({
+      type: "credential.upsert",
+      item: result.item
+    });
+    return res.status(201).json(result);
+  })
+);
+
+api.post(
+  "/rotation/run-due",
+  asyncHandler(async (req, res) => {
+    const limit = Number(req.body?.limit || 25);
+    const result = await rotateDueCredentials(limit);
+    await addAuditLog({
+      type: "CREDENTIAL_ROTATION_DUE_RUN",
+      detail: `due=${result.totalDue};rotated=${result.rotated};failed=${result.failed}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    if (Array.isArray(result.items) && result.items.length > 0) {
+      syncHub.publish({
+        type: "credential.batch_upsert",
+        items: result.items
+      });
+    }
+    return res.json(result);
+  })
+);
+
+api.get(
+  "/rotation/due",
+  asyncHandler(async (_req, res) => {
+    const items = await listCredentials("");
+    const due = items.filter((item) => isRotationDue(item.rotationPolicy));
+    return res.json({
+      total: due.length,
+      items: due
+    });
+  })
+);
+
 api.get(
   "/audit",
   asyncHandler(async (req, res) => {
@@ -493,6 +573,7 @@ syncHub.attachWebSocketServer(server, `${config.apiBasePath}/sync/ws`);
 backupService.start().catch(() => {
   // Non-fatal scheduler startup failure.
 });
+startRotationScheduler();
 
 server.on("error", (error) => {
   if (error?.code === "EADDRINUSE") {
@@ -508,4 +589,31 @@ function getIp(req) {
 
 function getUa(req) {
   return String(req.headers["user-agent"] || "n/a");
+}
+
+function startRotationScheduler() {
+  const intervalMs = 10 * 60 * 1000;
+  const run = async () => {
+    try {
+      const result = await rotateDueCredentials(50);
+      if (result.rotated > 0) {
+        await addAuditLog({
+          type: "CREDENTIAL_ROTATION_AUTO_COMPLETED",
+          detail: `rotated=${result.rotated};failed=${result.failed}`,
+          ip: "server",
+          userAgent: "rotation-scheduler"
+        });
+        syncHub.publish({
+          type: "credential.batch_upsert",
+          items: result.items
+        });
+      }
+    } catch {
+      // Non-fatal auto-rotation scheduler failure.
+    }
+  };
+  run().catch(() => {
+    // Ignore startup errors; scheduler keeps running.
+  });
+  setInterval(run, intervalMs).unref?.();
 }

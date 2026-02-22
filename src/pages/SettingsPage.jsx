@@ -9,6 +9,10 @@ export default function SettingsPage({
   security,
   addItem,
   scanCredentialBreaches,
+  updateRotationPolicy,
+  rotateCredentialNow,
+  rotateDueNow,
+  listRotationDue,
   autoLockEnabled,
   setAutoLockEnabled,
   autoLockMinutes,
@@ -40,6 +44,12 @@ export default function SettingsPage({
   const [nfcToken, setNfcToken] = useState("");
   const [hardwareBusy, setHardwareBusy] = useState(false);
   const [breachBusy, setBreachBusy] = useState(false);
+  const [rotationBusy, setRotationBusy] = useState(false);
+  const [rotationDueCount, setRotationDueCount] = useState(0);
+  const [rotationDuePreview, setRotationDuePreview] = useState([]);
+  const [rotationCredentialId, setRotationCredentialId] = useState("");
+  const [rotationEnabled, setRotationEnabled] = useState(true);
+  const [rotationIntervalDays, setRotationIntervalDays] = useState(90);
 
   useEffect(() => {
     loadSecurityData();
@@ -78,6 +88,11 @@ export default function SettingsPage({
       setDevices(devRes.items || []);
       setAudit(auditRes.items || []);
       setShareTargets(shareRes.items || []);
+      if (listRotationDue) {
+        const rotation = await listRotationDue();
+        setRotationDueCount(rotation?.total || 0);
+        setRotationDuePreview((rotation?.items || []).slice(0, 6));
+      }
     } catch {
       // Silent by design in settings panel.
     }
@@ -297,6 +312,60 @@ export default function SettingsPage({
     setTravelModeDurationMinutes?.(clamped);
   };
 
+  const applyRotationPolicyToSelected = async () => {
+    if (!rotationCredentialId) {
+      pushToast("Selecciona una credencial para configurar rotacion", "error");
+      return;
+    }
+    setRotationBusy(true);
+    try {
+      const updated = await updateRotationPolicy?.(rotationCredentialId, {
+        enabled: Boolean(rotationEnabled),
+        intervalDays: Number(rotationIntervalDays || 90)
+      });
+      if (!updated) throw new Error("No se pudo actualizar la politica de rotacion.");
+      await loadSecurityData();
+      pushToast("Politica de auto-rotacion actualizada", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setRotationBusy(false);
+    }
+  };
+
+  const rotateSelectedNow = async () => {
+    if (!rotationCredentialId) {
+      pushToast("Selecciona una credencial para rotar", "error");
+      return;
+    }
+    setRotationBusy(true);
+    try {
+      const result = await rotateCredentialNow?.(rotationCredentialId, "settings_manual");
+      await loadSecurityData();
+      pushToast(`Rotacion aplicada (${result?.rotation?.kind || "N/A"})`, "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setRotationBusy(false);
+    }
+  };
+
+  const runDueRotation = async () => {
+    setRotationBusy(true);
+    try {
+      const result = await rotateDueNow?.(50);
+      await loadSecurityData();
+      pushToast(
+        `Rotacion vencidas: ${result?.rotated || 0} rotadas, ${result?.failed || 0} fallidas`,
+        result?.failed ? "error" : "success"
+      );
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setRotationBusy(false);
+    }
+  };
+
   return (
     <section>
       <header className="page-head">
@@ -404,6 +473,63 @@ export default function SettingsPage({
       </div>
 
       <div className="panel settings-grid security-grid">
+        <article className="action-card">
+          <h3>4.3 Auto-rotacion de credenciales</h3>
+          <p>Rotacion para servicios compatibles: GitHub tokens, API keys y SSH keys.</p>
+          <small className="muted">Credenciales vencidas ahora: {rotationDueCount}</small>
+          <label>
+            Credencial compatible
+            <select value={rotationCredentialId} onChange={(e) => setRotationCredentialId(e.target.value)}>
+              <option value="">Seleccionar...</option>
+              {items
+                .filter((item) => item.rotationPolicy?.supported)
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.service} ({item.rotationPolicy?.kind})
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={rotationEnabled} onChange={(e) => setRotationEnabled(e.target.checked)} />
+            Activar auto-rotacion para esta credencial
+          </label>
+          <label>
+            Intervalo (dias)
+            <input
+              type="number"
+              min="1"
+              max="365"
+              step="1"
+              value={rotationIntervalDays}
+              onChange={(e) => setRotationIntervalDays(Number(e.target.value || 90))}
+            />
+          </label>
+          <div className="inline-actions">
+            <button className="primary-btn" type="button" onClick={applyRotationPolicyToSelected} disabled={rotationBusy}>
+              Guardar politica
+            </button>
+            <button className="icon-btn" type="button" onClick={rotateSelectedNow} disabled={rotationBusy}>
+              Rotar seleccionada
+            </button>
+          </div>
+          <button className="primary-btn" type="button" onClick={runDueRotation} disabled={rotationBusy}>
+            {rotationBusy ? "Rotando..." : "Rotar todas las vencidas"}
+          </button>
+          {rotationDuePreview.length > 0 ? (
+            <ul className="security-list">
+              {rotationDuePreview.map((item) => (
+                <li key={item.id}>
+                  <strong>{item.service}</strong>
+                  <small>{item.rotationPolicy?.kind || "N/A"}</small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">Sin credenciales vencidas para rotacion.</p>
+          )}
+        </article>
+
         <article className="action-card">
           <h3>0.2.3 Modo presentacion</h3>
           <p>Oculta datos sensibles temporalmente cuando compartes pantalla.</p>

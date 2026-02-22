@@ -138,6 +138,26 @@ Fecha: 2026-02-22
 - Se persiste `entryType` en backend y se protege con firma digital de entrada.
 - En `Vault` se muestra badge de tipo detectado en cada tarjeta.
 
+## 4.3 - Auto-rotacion de contrasenas
+
+- Soporte para servicios compatibles:
+  - GitHub tokens
+  - API keys
+  - SSH keys
+- Politica por credencial:
+  - `enabled`
+  - `intervalDays`
+  - `nextRotationAt`
+  - `lastRotatedAt`
+- Rotacion manual por credencial desde `Vault` y `Settings`.
+- Rotacion masiva de credenciales vencidas desde `Settings`.
+- Scheduler backend que ejecuta rotaciones vencidas automaticamente.
+- Nuevos endpoints:
+  - `PUT /credentials/:id/rotation-policy`
+  - `POST /credentials/:id/rotate`
+  - `GET /rotation/due`
+  - `POST /rotation/run-due`
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

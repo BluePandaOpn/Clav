@@ -30,7 +30,11 @@ export default function App() {
     triggerHoneyAccess,
     checkCredentialBreach,
     scanCredentialBreaches,
-    getCredentialHistory
+    getCredentialHistory,
+    updateRotationPolicy,
+    rotateCredentialNow,
+    rotateDueNow,
+    listRotationDue
   } = useCredentials(security);
   const { toasts, pushToast, removeToast } = useToasts();
   const [generatedPassword, setGeneratedPassword] = useState("");
@@ -149,6 +153,10 @@ export default function App() {
     checkCredentialBreach,
     scanCredentialBreaches,
     getCredentialHistory,
+    updateRotationPolicy,
+    rotateCredentialNow,
+    rotateDueNow,
+    listRotationDue,
     pushToast,
     generatedPassword,
     setGeneratedPassword,

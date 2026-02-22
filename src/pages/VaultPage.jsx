@@ -25,6 +25,8 @@ export default function VaultPage({
   triggerHoneyAccess,
   checkCredentialBreach,
   getCredentialHistory,
+  updateRotationPolicy,
+  rotateCredentialNow,
   travelModeActive,
   presentationModeEnabled
 }) {
@@ -158,6 +160,31 @@ export default function VaultPage({
     }
   };
 
+  const toggleAutoRotation = async (item, enabled) => {
+    try {
+      const updated = await updateRotationPolicy?.(item.id, { enabled });
+      if (!updated) return;
+      pushToast(
+        enabled
+          ? `Auto-rotacion activada para ${item.service}`
+          : `Auto-rotacion desactivada para ${item.service}`,
+        "info"
+      );
+    } catch (error) {
+      pushToast(error.message, "error");
+    }
+  };
+
+  const rotateNow = async (item) => {
+    try {
+      const result = await rotateCredentialNow?.(item.id, "vault_manual");
+      const kindLabel = getRotationKindLabel(result?.rotation?.kind);
+      pushToast(`Rotacion completada (${kindLabel}) en ${item.service}`, "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    }
+  };
+
   const setField = (name, value) => setForm((prev) => ({ ...prev, [name]: value }));
 
   const generateHoneyBatch = async () => {
@@ -265,6 +292,21 @@ export default function VaultPage({
                   <button className="icon-btn" type="button" onClick={() => checkBreachNow(item)}>
                     Verificar brecha
                   </button>
+                  {item.rotationPolicy?.supported ? (
+                    <>
+                      <button className="icon-btn" type="button" onClick={() => rotateNow(item)}>
+                        Rotar ahora
+                      </button>
+                      <label className="check muted">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(item.rotationPolicy?.enabled)}
+                          onChange={(e) => toggleAutoRotation(item, e.target.checked)}
+                        />
+                        Auto-rotacion
+                      </label>
+                    </>
+                  ) : null}
                   <button className="icon-btn" type="button" onClick={() => toggleHistory(item)}>
                     {historyLoading[item.id] ? "Cargando..." : historyById[item.id] ? "Ocultar historial" : "Ver historial"}
                   </button>
@@ -303,4 +345,17 @@ export default function VaultPage({
       </div>
     </section>
   );
+}
+
+function getRotationKindLabel(kind) {
+  switch (String(kind || "").toUpperCase()) {
+    case "GITHUB_TOKEN":
+      return "GitHub token";
+    case "SSH_KEY":
+      return "SSH key";
+    case "API_KEY":
+      return "API key";
+    default:
+      return "no compatible";
+  }
 }

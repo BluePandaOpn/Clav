@@ -441,6 +441,11 @@ select:focus {
   border-color: color-mix(in srgb, var(--fg) 20%, var(--border));
 }
 
+.rotation-badge {
+  color: color-mix(in srgb, var(--success) 70%, var(--fg));
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+}
+
 .password-row {
   display: flex;
   justify-content: space-between;

@@ -193,6 +193,50 @@ export function useCredentials(security) {
     return api.getCredentialHistory(id);
   }, []);
 
+  const updateRotationPolicy = useCallback(async (id, payload) => {
+    const data = await api.updateCredentialRotationPolicy(id, payload);
+    if (data?.item) {
+      setItems((prev) => {
+        const next = prev.map((item) => (item.id === data.item.id ? data.item : item));
+        saveEncryptedVault?.(next);
+        return next;
+      });
+    }
+    return data?.item || null;
+  }, [saveEncryptedVault]);
+
+  const rotateCredentialNow = useCallback(async (id, reason = "manual") => {
+    const data = await api.rotateCredential(id, { reason });
+    if (data?.item) {
+      setItems((prev) => {
+        const next = prev.map((item) => (item.id === data.item.id ? data.item : item));
+        saveEncryptedVault?.(next);
+        return next;
+      });
+    }
+    return data;
+  }, [saveEncryptedVault]);
+
+  const rotateDueNow = useCallback(async (limit = 25) => {
+    const data = await api.rotateDueCredentials({ limit });
+    if (Array.isArray(data?.items) && data.items.length > 0) {
+      setItems((prev) => {
+        const map = new Map(prev.map((item) => [item.id, item]));
+        for (const rotated of data.items) {
+          map.set(rotated.id, rotated);
+        }
+        const next = Array.from(map.values()).sort((a, b) => Date.parse(b.updatedAt || 0) - Date.parse(a.updatedAt || 0));
+        saveEncryptedVault?.(next);
+        return next;
+      });
+    }
+    return data;
+  }, [saveEncryptedVault]);
+
+  const listRotationDue = useCallback(async () => {
+    return api.listRotationDue();
+  }, []);
+
   return {
     items,
     loading,
@@ -205,7 +249,11 @@ export function useCredentials(security) {
     triggerHoneyAccess,
     checkCredentialBreach,
     scanCredentialBreaches,
-    getCredentialHistory
+    getCredentialHistory,
+    updateRotationPolicy,
+    rotateCredentialNow,
+    rotateDueNow,
+    listRotationDue
   };
 }
 

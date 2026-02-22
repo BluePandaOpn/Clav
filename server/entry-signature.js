@@ -12,7 +12,11 @@ const { privateKey, publicKey } = loadOrCreateSigningKeyPair();
 
 export function signCredentialEntry(entry) {
   const payload = Buffer.from(
-    canonicalizeForSignature(entry, { includeSensitive: true, includeEntryType: true }),
+    canonicalizeForSignature(entry, {
+      includeSensitive: true,
+      includeEntryType: true,
+      includeRotationPolicy: true
+    }),
     "utf8"
   );
   const signature = sign(null, payload, privateKey);
@@ -27,19 +31,41 @@ export function verifyCredentialEntry(entry) {
   if (!entry?.signature?.sig) return false;
   const signature = Buffer.from(entry.signature.sig, "base64");
   const v3Payload = Buffer.from(
-    canonicalizeForSignature(entry, { includeSensitive: true, includeEntryType: true }),
+    canonicalizeForSignature(entry, {
+      includeSensitive: true,
+      includeEntryType: true,
+      includeRotationPolicy: true
+    }),
     "utf8"
   );
   if (verify(null, v3Payload, publicKey, signature)) return true;
 
+  const v25Payload = Buffer.from(
+    canonicalizeForSignature(entry, {
+      includeSensitive: true,
+      includeEntryType: true,
+      includeRotationPolicy: false
+    }),
+    "utf8"
+  );
+  if (verify(null, v25Payload, publicKey, signature)) return true;
+
   const v2Payload = Buffer.from(
-    canonicalizeForSignature(entry, { includeSensitive: true, includeEntryType: false }),
+    canonicalizeForSignature(entry, {
+      includeSensitive: true,
+      includeEntryType: false,
+      includeRotationPolicy: false
+    }),
     "utf8"
   );
   if (verify(null, v2Payload, publicKey, signature)) return true;
 
   const v1Payload = Buffer.from(
-    canonicalizeForSignature(entry, { includeSensitive: false, includeEntryType: false }),
+    canonicalizeForSignature(entry, {
+      includeSensitive: false,
+      includeEntryType: false,
+      includeRotationPolicy: false
+    }),
     "utf8"
   );
   return verify(null, v1Payload, publicKey, signature);
@@ -48,6 +74,7 @@ export function verifyCredentialEntry(entry) {
 function canonicalizeForSignature(entry, options = {}) {
   const includeSensitive = options.includeSensitive !== false;
   const includeEntryType = options.includeEntryType !== false;
+  const includeRotationPolicy = options.includeRotationPolicy !== false;
   const target = {
     id: entry.id,
     service: entry.service,
@@ -66,7 +93,24 @@ function canonicalizeForSignature(entry, options = {}) {
   if (includeSensitive) {
     target.isSensitive = Boolean(entry.isSensitive);
   }
+  if (includeRotationPolicy) {
+    target.rotationPolicy = normalizeRotationPolicy(entry.rotationPolicy);
+  }
   return stableStringify(target);
+}
+
+function normalizeRotationPolicy(value) {
+  const policy = value && typeof value === "object" ? value : {};
+  return {
+    supported: Boolean(policy.supported),
+    kind: String(policy.kind || "NONE"),
+    enabled: Boolean(policy.enabled),
+    intervalDays: Number(policy.intervalDays || 0),
+    lastRotatedAt: policy.lastRotatedAt ? String(policy.lastRotatedAt) : null,
+    nextRotationAt: policy.nextRotationAt ? String(policy.nextRotationAt) : null,
+    lastRotationStatus: policy.lastRotationStatus ? String(policy.lastRotationStatus) : null,
+    lastRotationError: policy.lastRotationError ? String(policy.lastRotationError) : null
+  };
 }
 
 function stableStringify(value) {
