@@ -347,6 +347,9 @@ export default function SettingsPage({
     nfcEnabled: false
   };
   const compromisedCount = items.filter((item) => item?.breachStatus?.compromised).length;
+  const trustedDevicesCount = devices.length;
+  const securityEventsCount = audit.length;
+  const sharedTargetsCount = shareTargets.length;
 
   const runBreachScan = async () => {
     setBreachBusy(true);
@@ -606,13 +609,38 @@ export default function SettingsPage({
   };
 
   return (
-    <section>
-      <header className="page-head">
-        <h2>Settings</h2>
-        <p>Mantenimiento, respaldo y limpieza de la boveda.</p>
+    <section className="settings-page">
+      <header className="page-head settings-hero">
+        <div>
+          <p className="settings-kicker">Centro de configuracion</p>
+          <h2>Settings</h2>
+          <p>Mantenimiento, respaldo, hardening y controles de operacion de la boveda.</p>
+        </div>
+        <div className="settings-hero-stats">
+          <article className="settings-stat">
+            <small>Dispositivos</small>
+            <strong>{trustedDevicesCount}</strong>
+            <span>{sharedTargetsCount} destinos para compartir</span>
+          </article>
+          <article className="settings-stat">
+            <small>Supervision</small>
+            <strong>{securityEventsCount}</strong>
+            <span>{compromisedCount} credenciales comprometidas</span>
+          </article>
+          <article className="settings-stat">
+            <small>Estado</small>
+            <strong>{offlineMode ? "Offline" : "Online"}</strong>
+            <span>{pendingSyncCount} cambios pendientes</span>
+          </article>
+        </div>
       </header>
 
-      <div className="panel settings-grid">
+      <section className="settings-section">
+        <div className="settings-section-head">
+          <h3>Operaciones base</h3>
+          <p>Acciones de respaldo, bloqueo, acceso por QR y transferencias entre dispositivos.</p>
+        </div>
+        <div className="panel settings-grid settings-grid-core">
         <article className="action-card">
           <h3>Exportar boveda</h3>
           <p>Descarga un backup JSON local de tus credenciales.</p>
@@ -715,8 +743,14 @@ export default function SettingsPage({
           </button>
         </article>
       </div>
+      </section>
 
-      <div className="panel settings-grid security-grid">
+      <section className="settings-section">
+        <div className="settings-section-head">
+          <h3>Seguridad avanzada</h3>
+          <p>Politicas, hardening del acceso y controles operativos de seguridad.</p>
+        </div>
+        <div className="panel settings-grid security-grid settings-grid-advanced">
         <article className="action-card">
           <h3>5.3 Modo offline completo</h3>
           <p>El vault opera offline y sincroniza cambios al volver la conexion.</p>
@@ -1168,6 +1202,7 @@ export default function SettingsPage({
           </ul>
         </article>
       </div>
+      </section>
     </section>
   );
 }

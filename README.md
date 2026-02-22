@@ -122,6 +122,7 @@ npm run format:check
 Directorio: `python/`
 
 - Script principal: `python/deploy_secure.py`
+- Launchers automaticos: `python/script/`
 - Bootstrap venv: `python/bootstrap_venv.py`
 - Dependencias venv: `python/requirements.txt`
 - Documentacion: `python/README.md`
