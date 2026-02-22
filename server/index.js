@@ -26,10 +26,16 @@ import {
 import { generatePassword, getStrength } from "./password.js";
 import { approveQrChallenge, createQrChallenge, getQrChallengeStatus } from "./qr-unlock.js";
 import { createSyncHub } from "./sync-hub.js";
+import { createBackupService } from "./backup-service.js";
 
 const app = express();
 const api = express.Router();
 const syncHub = createSyncHub();
+const backupService = createBackupService({
+  config,
+  readStore,
+  addAuditLog
+});
 const asyncHandler =
   (fn) =>
   (req, res, next) =>
@@ -63,6 +69,30 @@ app.get("/healthz", (_req, res) => {
 api.get("/health", (_req, res) => {
   res.json({ ok: true, layers: config.encryptionLayers });
 });
+
+api.get(
+  "/backup/config",
+  asyncHandler(async (_req, res) => {
+    res.json(backupService.getConfig());
+  })
+);
+
+api.get(
+  "/backup/local",
+  asyncHandler(async (_req, res) => {
+    const items = await backupService.listBackups();
+    res.json({ items });
+  })
+);
+
+api.post(
+  "/backup/run",
+  asyncHandler(async (req, res) => {
+    const reason = String(req.body?.reason || "manual");
+    const result = await backupService.triggerBackup(reason);
+    return res.status(result.ok ? 201 : 200).json(result);
+  })
+);
 
 api.get(
   "/credentials",
@@ -460,6 +490,9 @@ const server = app.listen(config.port, () => {
   console.log(`API running on http://localhost:${config.port}${config.apiBasePath}`);
 });
 syncHub.attachWebSocketServer(server, `${config.apiBasePath}/sync/ws`);
+backupService.start().catch(() => {
+  // Non-fatal scheduler startup failure.
+});
 
 server.on("error", (error) => {
   if (error?.code === "EADDRINUSE") {

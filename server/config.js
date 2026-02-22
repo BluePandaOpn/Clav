@@ -45,6 +45,15 @@ const hibpRangeBaseUrl = process.env.HIBP_RANGE_BASE_URL || "https://api.pwnedpa
 const leakedPasswordsFile = process.env.LEAKED_PASSWORDS_FILE || "server/data/leaked-passwords.txt";
 const breachAutoScanOnList = String(process.env.BREACH_AUTO_SCAN_ON_LIST || "true").toLowerCase() !== "false";
 const breachStatusTtlHours = Number(process.env.BREACH_STATUS_TTL_HOURS || 24);
+const backupEnabled = String(process.env.BACKUP_ENABLED || "true").toLowerCase() !== "false";
+const backupDir = process.env.BACKUP_DIR || "server/data/backups";
+const backupRetention = Math.max(1, Number(process.env.BACKUP_RETENTION || 30));
+const backupAutoEnabled = String(process.env.BACKUP_AUTO_ENABLED || "true").toLowerCase() !== "false";
+const backupIntervalMinutes = Math.max(1, Number(process.env.BACKUP_INTERVAL_MINUTES || 60));
+const backupRunOnStartup = String(process.env.BACKUP_RUN_ON_STARTUP || "false").toLowerCase() === "true";
+const backupCloudProvider = String(process.env.BACKUP_CLOUD_PROVIDER || "none").toLowerCase();
+const backupCloudUrl = process.env.BACKUP_CLOUD_URL || "";
+const backupCloudAuthHeader = process.env.BACKUP_CLOUD_AUTH_HEADER || "";
 
 export const config = {
   apiNamespace,
@@ -59,5 +68,14 @@ export const config = {
   hibpRangeBaseUrl,
   leakedPasswordsFile,
   breachAutoScanOnList,
-  breachStatusTtlHours
+  breachStatusTtlHours,
+  backupEnabled,
+  backupDir,
+  backupRetention,
+  backupAutoEnabled,
+  backupIntervalMinutes,
+  backupRunOnStartup,
+  backupCloudProvider,
+  backupCloudUrl,
+  backupCloudAuthHeader
 };

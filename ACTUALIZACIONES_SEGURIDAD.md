@@ -107,6 +107,19 @@ Fecha: 2026-02-22
   - `ts`
   - `clientId`
 
+## 3.4 - Backups automaticos cifrados
+
+- Backups locales cifrados con AES-256-GCM en `server/data/backups` (configurable).
+- Soporte de upload en nube via `PUT` firmado para:
+  - S3
+  - GCP
+  - Azure
+- Exportacion programada con scheduler por intervalo configurable.
+- Endpoints:
+  - `GET /backup/config`
+  - `GET /backup/local`
+  - `POST /backup/run`
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

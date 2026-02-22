@@ -25,6 +25,7 @@ Gestor de passwords profesional con:
 - Auditoria visual (2.5): graficos de contrasenas debiles, duplicadas y antiguas
 - Sharding del vault (3.2): separacion fisica en metadatos, cifrado y entradas
 - Sincronizacion entre dispositivos (3.3): SSE + WebSockets + CRDT LWW
+- Backups automaticos cifrados (3.4): locales, nube y exportacion programada
 
 ## Requisitos
 
@@ -128,6 +129,22 @@ Prefix: `/api/v1/<API_NAMESPACE>`
 - `POST /honey/trigger`
 - `POST /breach/check/:id`
 - `POST /breach/scan`
+- `GET /backup/config`
+- `GET /backup/local`
+- `POST /backup/run`
 
 Endpoint publico de vida:
 - `GET /healthz`
+
+## Backups automaticos cifrados (3.4)
+
+Configuracion por `.env`:
+- `BACKUP_ENABLED`: habilita backups cifrados.
+- `BACKUP_DIR`: carpeta local de backups.
+- `BACKUP_RETENTION`: cantidad maxima de backups locales.
+- `BACKUP_AUTO_ENABLED`: habilita scheduler.
+- `BACKUP_INTERVAL_MINUTES`: intervalo de exportacion programada.
+- `BACKUP_RUN_ON_STARTUP`: ejecutar backup al iniciar servidor.
+- `BACKUP_CLOUD_PROVIDER`: `none`, `s3`, `gcp`, `azure`.
+- `BACKUP_CLOUD_URL`: URL firmada/presigned para upload `PUT`.
+- `BACKUP_CLOUD_AUTH_HEADER`: header opcional `Authorization`.
