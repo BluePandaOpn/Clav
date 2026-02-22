@@ -128,6 +128,16 @@ Fecha: 2026-02-22
   - Caracteres permitidos (minusculas, mayusculas, numeros, simbolos).
 - Al generar, aplica automaticamente la politica detectada si el modo inteligente esta activo.
 
+## 4.2 - Clasificacion automatica
+
+- Deteccion automatica por heuristicas para cada entrada:
+  - `LOGIN`
+  - `CREDIT_CARD`
+  - `SECURE_NOTE`
+  - `API_KEY`
+- Se persiste `entryType` en backend y se protege con firma digital de entrada.
+- En `Vault` se muestra badge de tipo detectado en cada tarjeta.
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

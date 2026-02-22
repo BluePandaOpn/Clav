@@ -27,6 +27,7 @@ Gestor de passwords profesional con:
 - Sincronizacion entre dispositivos (3.3): SSE + WebSockets + CRDT LWW
 - Backups automaticos cifrados (3.4): locales, nube y exportacion programada
 - Generador de contrasenas inteligente (4.1): deteccion de requisitos de sitio y politica
+- Clasificacion automatica (4.2): login, tarjeta de credito, nota segura y API key
 
 ## Requisitos
 

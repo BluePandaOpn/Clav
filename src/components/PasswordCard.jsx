@@ -14,6 +14,7 @@ export default function PasswordCard({
   const breached = Boolean(item?.breachStatus?.compromised);
   const travelLocked = Boolean(travelModeActive && item.isSensitive);
   const presentationLocked = Boolean(presentationModeEnabled);
+  const entryTypeLabel = getEntryTypeLabel(item.entryType);
 
   const toggleReveal = () => {
     if (travelLocked || presentationLocked) {
@@ -36,6 +37,7 @@ export default function PasswordCard({
           <p>{presentationLocked ? "[PRESENTATION_MODE]" : item.username || "Sin usuario"}</p>
         </div>
         <div className="inline-actions">
+          <span className="badge type-badge">{entryTypeLabel}</span>
           {item.isHoney ? (
             <span className="badge honey-badge">
               <AlertTriangle size={12} /> Honey
@@ -81,4 +83,17 @@ export default function PasswordCard({
       </div>
     </article>
   );
+}
+
+function getEntryTypeLabel(type) {
+  switch (String(type || "").toUpperCase()) {
+    case "CREDIT_CARD":
+      return "Tarjeta";
+    case "SECURE_NOTE":
+      return "Nota segura";
+    case "API_KEY":
+      return "API key";
+    default:
+      return "Login";
+  }
 }

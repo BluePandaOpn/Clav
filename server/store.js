@@ -7,6 +7,7 @@ import { signCredentialEntry, verifyCredentialEntry } from "./entry-signature.js
 import { createHybridSharePackage } from "./hybrid-share.js";
 import { checkPasswordBreach } from "./breach-detection.js";
 import { config } from "./config.js";
+import { classifyEntryType } from "./entry-classification.js";
 
 const LEGACY_DB_FILE = new URL("./data/vault.json", import.meta.url);
 const LEGACY_DB_FILE_PATH = fileURLToPath(LEGACY_DB_FILE);
@@ -206,6 +207,7 @@ export async function createCredential(payload) {
   const now = new Date().toISOString();
   const id = randomUUID();
   const passwordEnc = encryptWithLayers(payload.password, id);
+  const entryType = payload.entryType || classifyEntryType(payload);
   const unsignedItem = {
     id,
     service: payload.service,
@@ -213,6 +215,7 @@ export async function createCredential(payload) {
     passwordEnc,
     category: payload.category || "General",
     notes: payload.notes || "",
+    entryType,
     isSensitive: Boolean(payload.isSensitive),
     isHoney: Boolean(payload.isHoney),
     honeyTag: payload.honeyTag || "",
@@ -281,12 +284,26 @@ export async function updateCredential(id, payload) {
       ? existing.changeLog
       : [];
 
+  const nextService = payload.service ?? existing.service;
+  const nextUsername = payload.username ?? existing.username;
+  const nextNotes = payload.notes ?? existing.notes;
+  const nextPassword = hasPasswordChange ? payload.password : decryptSafe(existing.passwordEnc, id);
+  const entryType =
+    payload.entryType ||
+    classifyEntryType({
+      service: nextService,
+      username: nextUsername,
+      notes: nextNotes,
+      password: nextPassword
+    });
+
   const updatedItem = {
     ...existing,
-    service: payload.service ?? existing.service,
-    username: payload.username ?? existing.username,
+    service: nextService,
+    username: nextUsername,
     category: payload.category ?? existing.category,
-    notes: payload.notes ?? existing.notes,
+    notes: nextNotes,
+    entryType,
     isSensitive:
       typeof payload.isSensitive === "boolean" ? payload.isSensitive : Boolean(existing.isSensitive),
     isHoney: typeof payload.isHoney === "boolean" ? payload.isHoney : Boolean(existing.isHoney),
@@ -722,6 +739,7 @@ function materializeCredential(item) {
     password,
     category: item.category || "General",
     notes: item.notes || "",
+    entryType: item.entryType || classifyEntryType({ service: item.service, username: item.username, notes: item.notes, password }),
     isSensitive: Boolean(item.isSensitive),
     isHoney: Boolean(item.isHoney),
     honeyTag: item.honeyTag || "",
@@ -760,10 +778,19 @@ function getChangedFields(existing, payload, hasPasswordChange) {
   if (typeof payload.username === "string" && payload.username !== existing.username) changed.push("username");
   if (typeof payload.category === "string" && payload.category !== existing.category) changed.push("category");
   if (typeof payload.notes === "string" && payload.notes !== existing.notes) changed.push("notes");
+  if (typeof payload.entryType === "string" && payload.entryType !== existing.entryType) changed.push("entryType");
   if (typeof payload.isSensitive === "boolean" && payload.isSensitive !== Boolean(existing.isSensitive)) {
     changed.push("isSensitive");
   }
   return changed;
+}
+
+function decryptSafe(passwordEnc, id) {
+  try {
+    return decryptWithLayers(passwordEnc, id);
+  } catch {
+    return "";
+  }
 }
 
 function makeServerCrdt() {

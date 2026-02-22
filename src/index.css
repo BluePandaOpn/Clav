@@ -436,6 +436,11 @@ select:focus {
   border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
 }
 
+.type-badge {
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--fg) 20%, var(--border));
+}
+
 .password-row {
   display: flex;
   justify-content: space-between;

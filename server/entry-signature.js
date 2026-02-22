@@ -11,7 +11,10 @@ const SIGN_KID = "vault-signing-ed25519-v1";
 const { privateKey, publicKey } = loadOrCreateSigningKeyPair();
 
 export function signCredentialEntry(entry) {
-  const payload = Buffer.from(canonicalizeForSignature(entry, { includeSensitive: true }), "utf8");
+  const payload = Buffer.from(
+    canonicalizeForSignature(entry, { includeSensitive: true, includeEntryType: true }),
+    "utf8"
+  );
   const signature = sign(null, payload, privateKey);
   return {
     alg: SIGN_ALG,
@@ -23,15 +26,28 @@ export function signCredentialEntry(entry) {
 export function verifyCredentialEntry(entry) {
   if (!entry?.signature?.sig) return false;
   const signature = Buffer.from(entry.signature.sig, "base64");
-  const v2Payload = Buffer.from(canonicalizeForSignature(entry, { includeSensitive: true }), "utf8");
+  const v3Payload = Buffer.from(
+    canonicalizeForSignature(entry, { includeSensitive: true, includeEntryType: true }),
+    "utf8"
+  );
+  if (verify(null, v3Payload, publicKey, signature)) return true;
+
+  const v2Payload = Buffer.from(
+    canonicalizeForSignature(entry, { includeSensitive: true, includeEntryType: false }),
+    "utf8"
+  );
   if (verify(null, v2Payload, publicKey, signature)) return true;
 
-  const v1Payload = Buffer.from(canonicalizeForSignature(entry, { includeSensitive: false }), "utf8");
+  const v1Payload = Buffer.from(
+    canonicalizeForSignature(entry, { includeSensitive: false, includeEntryType: false }),
+    "utf8"
+  );
   return verify(null, v1Payload, publicKey, signature);
 }
 
 function canonicalizeForSignature(entry, options = {}) {
   const includeSensitive = options.includeSensitive !== false;
+  const includeEntryType = options.includeEntryType !== false;
   const target = {
     id: entry.id,
     service: entry.service,
@@ -44,6 +60,9 @@ function canonicalizeForSignature(entry, options = {}) {
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt
   };
+  if (includeEntryType) {
+    target.entryType = entry.entryType || "LOGIN";
+  }
   if (includeSensitive) {
     target.isSensitive = Boolean(entry.isSensitive);
   }
