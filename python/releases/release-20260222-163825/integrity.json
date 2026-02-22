@@ -1,0 +1,21 @@
+{
+  "algorithm": "sha256",
+  "generatedAtUtc": "2026-02-22T16:38:25.844377Z",
+  "files": [
+    {
+      "path": "assets/index-BPbijBRQ.css",
+      "sha256": "1526bf22994cadf56ec927fc14af05bccd7808cbb855cad2d09315074d0ba58c",
+      "bytes": 22767
+    },
+    {
+      "path": "assets/index-Dew5LJEB.js",
+      "sha256": "aabd1408b34b5e28faf26cceb22843365afa74c6fdfcd09f5c5d6c7c4f22b28a",
+      "bytes": 269840
+    },
+    {
+      "path": "index.html",
+      "sha256": "574e4b3acb7c14337ffdce93f8fea59f73c514cbbc3ae9be76ec345d9181c163",
+      "bytes": 405
+    }
+  ]
+}

@@ -11,7 +11,7 @@
     "preview": "vite preview --host",
     "preview:full": "concurrently \"npm run dev:server\" \"npm run preview\"",
     "start": "node server/index.js",
-    "lint": "eslint . --ext .js,.jsx",
+    "lint": "eslint . --ext .js,.jsx --ignore-pattern \"**/dist/**\" --ignore-pattern \"python/releases/**\" --ignore-pattern \"python/state/**\" --ignore-pattern \"python/.venv/**\" --ignore-pattern \"server/data/**\"",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

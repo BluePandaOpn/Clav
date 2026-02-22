@@ -20,7 +20,8 @@ function Write-Step {
 function Invoke-AnimatedStep {
   param(
     [string]$Name,
-    [scriptblock]$Action
+    [scriptblock]$Action,
+    [switch]$AllowFailure
   )
 
   Write-Host "[RUN ] $Name" -ForegroundColor Gray
@@ -29,7 +30,15 @@ function Invoke-AnimatedStep {
     Start-Sleep -Milliseconds 70
   }
   & $Action
+  $exitCode = $LASTEXITCODE
   Write-Progress -Activity $Name -Completed
+  if ($exitCode -ne 0) {
+    if ($AllowFailure) {
+      Write-Host "[WARN] $Name failed (exit $exitCode) - continuing." -ForegroundColor Yellow
+      return
+    }
+    throw "Step failed ($exitCode): $Name"
+  }
   Write-Host "[OK  ] $Name" -ForegroundColor Green
 }
 
