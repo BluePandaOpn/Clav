@@ -31,12 +31,17 @@ async function ensureStore() {
   const hasAnyShard = await anyShardExists();
   if (!hasAnyShard) {
     const legacy = await readLegacyStoreIfExists();
-    const seed = normalizeStore(legacy || { credentials: [], trustedDevices: [], auditLogs: [] });
+    const seed = normalizeStore(legacy || { credentials: [], trustedDevices: [], auditLogs: [], sharedVaults: [] });
     await writeShardsFromStore(seed, null);
     return;
   }
 
-  const entries = await readJsonSafe(ENTRIES_FILE_PATH, { credentials: [], trustedDevices: [], auditLogs: [] });
+  const entries = await readJsonSafe(ENTRIES_FILE_PATH, {
+    credentials: [],
+    trustedDevices: [],
+    auditLogs: [],
+    sharedVaults: []
+  });
   const crypto = await readJsonSafe(CRYPTO_FILE_PATH, { credentials: [] });
   const metadata = await readJsonSafe(METADATA_FILE_PATH, null);
 
@@ -62,7 +67,12 @@ export async function writeStore(data) {
 }
 
 async function readCombinedFromShards() {
-  const entriesShard = await readJsonSafe(ENTRIES_FILE_PATH, { credentials: [], trustedDevices: [], auditLogs: [] });
+  const entriesShard = await readJsonSafe(ENTRIES_FILE_PATH, {
+    credentials: [],
+    trustedDevices: [],
+    auditLogs: [],
+    sharedVaults: []
+  });
   const cryptoShard = await readJsonSafe(CRYPTO_FILE_PATH, { credentials: [] });
   const entriesList = Array.isArray(entriesShard.credentials) ? entriesShard.credentials : [];
   const cryptoMap = new Map();
@@ -86,7 +96,8 @@ async function readCombinedFromShards() {
   return normalizeStore({
     credentials,
     trustedDevices: Array.isArray(entriesShard.trustedDevices) ? entriesShard.trustedDevices : [],
-    auditLogs: Array.isArray(entriesShard.auditLogs) ? entriesShard.auditLogs : []
+    auditLogs: Array.isArray(entriesShard.auditLogs) ? entriesShard.auditLogs : [],
+    sharedVaults: Array.isArray(entriesShard.sharedVaults) ? entriesShard.sharedVaults : []
   });
 }
 
@@ -109,7 +120,8 @@ async function writeShardsFromStore(store, previousMetadata) {
   const entriesShard = {
     credentials: entryCredentials,
     trustedDevices: Array.isArray(store.trustedDevices) ? store.trustedDevices : [],
-    auditLogs: Array.isArray(store.auditLogs) ? store.auditLogs : []
+    auditLogs: Array.isArray(store.auditLogs) ? store.auditLogs : [],
+    sharedVaults: Array.isArray(store.sharedVaults) ? store.sharedVaults : []
   };
   const cryptoShard = {
     credentials: cryptoCredentials
@@ -135,7 +147,8 @@ function buildMetadata(entriesShard, cryptoShard, previousMetadata) {
       credentialsEntries: Array.isArray(entriesShard.credentials) ? entriesShard.credentials.length : 0,
       credentialsCrypto: Array.isArray(cryptoShard.credentials) ? cryptoShard.credentials.length : 0,
       trustedDevices: Array.isArray(entriesShard.trustedDevices) ? entriesShard.trustedDevices.length : 0,
-      auditLogs: Array.isArray(entriesShard.auditLogs) ? entriesShard.auditLogs.length : 0
+      auditLogs: Array.isArray(entriesShard.auditLogs) ? entriesShard.auditLogs.length : 0,
+      sharedVaults: Array.isArray(entriesShard.sharedVaults) ? entriesShard.sharedVaults.length : 0
     }
   };
 }
@@ -909,6 +922,157 @@ export async function listAuditLogs(limit = 60) {
   return db.auditLogs.slice(0, Math.max(1, Math.min(300, Number(limit) || 60)));
 }
 
+export async function listSharedVaults(actor = "owner") {
+  const db = await readStore();
+  const normalizedActor = String(actor || "owner").trim().toLowerCase();
+  const now = Date.now();
+  return (db.sharedVaults || [])
+    .filter((vault) => canReadSharedVault(vault, normalizedActor, now))
+    .map((vault) => materializeSharedVault(vault, db.credentials || [], normalizedActor, now));
+}
+
+export async function createSharedVault(payload = {}) {
+  const db = await readStore();
+  const now = new Date().toISOString();
+  const audience = normalizeAudience(payload.audience);
+  const owner = normalizeActor(payload.owner || "owner");
+  const item = {
+    id: randomUUID(),
+    name: String(payload.name || `${audience.toLowerCase()} vault`),
+    audience,
+    owner,
+    members: [
+      {
+        id: randomUUID(),
+        actor: owner,
+        permission: "WRITE",
+        expiresAt: null,
+        createdAt: now
+      }
+    ],
+    credentialIds: [],
+    createdAt: now,
+    updatedAt: now
+  };
+  db.sharedVaults.unshift(item);
+  await writeStore(db);
+  return materializeSharedVault(item, db.credentials || [], owner, Date.now());
+}
+
+export async function addSharedVaultMember(vaultId, payload = {}) {
+  const db = await readStore();
+  const index = findSharedVaultIndex(db.sharedVaults, vaultId);
+  if (index === -1) return null;
+  const vault = db.sharedVaults[index];
+  const actor = normalizeActor(payload.actor || payload.label);
+  if (!actor) {
+    const err = new Error("actor is required");
+    err.statusCode = 400;
+    throw err;
+  }
+  const permission = normalizeSharedPermission(payload.permission);
+  const nowIso = new Date().toISOString();
+  const expiresAt = permission === "TEMPORARY" ? resolveExpiresAt(payload.expiresAt, payload.expiresInHours) : null;
+  if (permission === "TEMPORARY" && !expiresAt) {
+    const err = new Error("temporary permission requires expiresAt or expiresInHours");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const existingIndex = (vault.members || []).findIndex((item) => normalizeActor(item.actor) === actor);
+  const member = {
+    id: existingIndex >= 0 ? vault.members[existingIndex].id : randomUUID(),
+    actor,
+    permission,
+    expiresAt,
+    createdAt: existingIndex >= 0 ? vault.members[existingIndex].createdAt : nowIso
+  };
+  const members = Array.isArray(vault.members) ? [...vault.members] : [];
+  if (existingIndex >= 0) {
+    members[existingIndex] = member;
+  } else {
+    members.push(member);
+  }
+
+  const updated = {
+    ...vault,
+    members,
+    updatedAt: nowIso
+  };
+  db.sharedVaults[index] = updated;
+  await writeStore(db);
+  return materializeSharedVault(updated, db.credentials || [], actor, Date.now());
+}
+
+export async function removeSharedVaultMember(vaultId, memberId) {
+  const db = await readStore();
+  const index = findSharedVaultIndex(db.sharedVaults, vaultId);
+  if (index === -1) return null;
+  const vault = db.sharedVaults[index];
+  const before = (vault.members || []).length;
+  const members = (vault.members || []).filter((item) => item.id !== memberId);
+  if (members.length === before) return null;
+  const updated = {
+    ...vault,
+    members,
+    updatedAt: new Date().toISOString()
+  };
+  db.sharedVaults[index] = updated;
+  await writeStore(db);
+  return materializeSharedVault(updated, db.credentials || [], "owner", Date.now());
+}
+
+export async function addCredentialToSharedVault(vaultId, credentialId, actor = "owner") {
+  const db = await readStore();
+  const index = findSharedVaultIndex(db.sharedVaults, vaultId);
+  if (index === -1) return null;
+  const vault = db.sharedVaults[index];
+  const permission = resolvePermission(vault, actor, Date.now());
+  if (!permission || permission === "READ") {
+    const err = new Error("Insufficient permission for shared vault.");
+    err.statusCode = 403;
+    throw err;
+  }
+  const credential = db.credentials.find((item) => item.id === credentialId);
+  if (!credential) {
+    const err = new Error("Credential not found.");
+    err.statusCode = 404;
+    throw err;
+  }
+  if ((vault.credentialIds || []).includes(credentialId)) {
+    return materializeSharedVault(vault, db.credentials || [], actor, Date.now());
+  }
+  const updated = {
+    ...vault,
+    credentialIds: [credentialId, ...(vault.credentialIds || [])],
+    updatedAt: new Date().toISOString()
+  };
+  db.sharedVaults[index] = updated;
+  await writeStore(db);
+  return materializeSharedVault(updated, db.credentials || [], actor, Date.now());
+}
+
+export async function removeCredentialFromSharedVault(vaultId, credentialId, actor = "owner") {
+  const db = await readStore();
+  const index = findSharedVaultIndex(db.sharedVaults, vaultId);
+  if (index === -1) return null;
+  const vault = db.sharedVaults[index];
+  const permission = resolvePermission(vault, actor, Date.now());
+  if (!permission || permission === "READ") {
+    const err = new Error("Insufficient permission for shared vault.");
+    err.statusCode = 403;
+    throw err;
+  }
+  const updated = {
+    ...vault,
+    credentialIds: (vault.credentialIds || []).filter((id) => id !== credentialId),
+    updatedAt: new Date().toISOString()
+  };
+  db.sharedVaults[index] = updated;
+  await writeStore(db);
+  return materializeSharedVault(updated, db.credentials || [], actor, Date.now());
+}
+
 function materializeCredential(item) {
   if (!item) return item;
   if (!item.passwordEnc && typeof item.password === "string") {
@@ -979,7 +1143,8 @@ function normalizeStore(input) {
   const credentials = Array.isArray(db.credentials) ? db.credentials : [];
   const trustedDevices = Array.isArray(db.trustedDevices) ? db.trustedDevices : [];
   const auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
-  return { credentials, trustedDevices, auditLogs };
+  const sharedVaults = Array.isArray(db.sharedVaults) ? db.sharedVaults : [];
+  return { credentials, trustedDevices, auditLogs, sharedVaults };
 }
 
 function getChangedFields(existing, payload, hasPasswordChange) {
@@ -1076,4 +1241,81 @@ function compareCrdt(a, b) {
   if (leftTs !== rightTs) return leftTs - rightTs;
   if (left.clientId === right.clientId) return 0;
   return left.clientId > right.clientId ? 1 : -1;
+}
+
+function normalizeAudience(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (raw === "FAMILY" || raw === "TEAM" || raw === "COMPANY") return raw;
+  return "TEAM";
+}
+
+function normalizeSharedPermission(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (raw === "READ" || raw === "WRITE" || raw === "TEMPORARY") return raw;
+  return "READ";
+}
+
+function normalizeActor(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function resolveExpiresAt(expiresAt, expiresInHours) {
+  if (expiresAt && !Number.isNaN(Date.parse(String(expiresAt)))) {
+    return new Date(String(expiresAt)).toISOString();
+  }
+  const hours = Number(expiresInHours);
+  if (Number.isFinite(hours) && hours > 0) {
+    return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  }
+  return null;
+}
+
+function findSharedVaultIndex(sharedVaults, vaultId) {
+  return (Array.isArray(sharedVaults) ? sharedVaults : []).findIndex((vault) => vault.id === vaultId);
+}
+
+function resolvePermission(vault, actor, nowTs) {
+  const normalizedActor = normalizeActor(actor || "owner");
+  if (normalizedActor === normalizeActor(vault?.owner || "owner")) return "WRITE";
+  const members = Array.isArray(vault?.members) ? vault.members : [];
+  const member = members.find((item) => normalizeActor(item.actor) === normalizedActor);
+  if (!member) return null;
+  if (member.permission === "TEMPORARY") {
+    const exp = Date.parse(member.expiresAt || "");
+    if (Number.isNaN(exp) || exp < nowTs) return null;
+    return "TEMPORARY";
+  }
+  return normalizeSharedPermission(member.permission);
+}
+
+function canReadSharedVault(vault, actor, nowTs) {
+  const permission = resolvePermission(vault, actor, nowTs);
+  return Boolean(permission);
+}
+
+function materializeSharedVault(vault, allCredentials, actor, nowTs) {
+  const permission = resolvePermission(vault, actor, nowTs);
+  const credentialsById = new Map((allCredentials || []).map((item) => [item.id, item]));
+  const items = (vault.credentialIds || [])
+    .map((id) => credentialsById.get(id))
+    .filter(Boolean)
+    .map(materializeCredential);
+  return {
+    id: vault.id,
+    name: vault.name,
+    audience: normalizeAudience(vault.audience),
+    owner: vault.owner || "owner",
+    permission: permission || null,
+    members: (vault.members || []).map((member) => ({
+      id: member.id,
+      actor: member.actor,
+      permission: normalizeSharedPermission(member.permission),
+      expiresAt: member.expiresAt || null
+    })),
+    items,
+    createdAt: vault.createdAt,
+    updatedAt: vault.updatedAt
+  };
 }

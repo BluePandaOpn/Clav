@@ -1,0 +1,15 @@
+{
+  "credentials": [
+    {
+      "id": "8277addc-09b2-4bef-89c6-d501c3828054",
+      "passwordEnc": {
+        "v": 1,
+        "l": 10,
+        "alg": "aes-256-gcm",
+        "data": "/LsO4WibyJXMvRH9kgrxNImBwogS2jUwfvDLMgItIvp9gXZ/9KT8LWycFHecQKGcOaehOjUF4AzPSr0+103leBQSTpLtOmlRTzh43KMd5M/NxAvld43HJsN8SYQBy+VV+8bgBjwVyF6OIOC6wwfw14NMmFyDIm4u+bhLnXY3q+zU/yCW1rv5aTyKMll34D0Lk1YLrl/f4F7bxu+UnyQLEOKXBF8nCEBA2K+Z2sORnxeSWhW3PwBHYPVbtiXMFlRlfDCMkPpMZjoLi+b7QTRunI6TYpYXt/JlS6dXWNkfl+X56K0tww9kJCjjagRscqTUEIsNiEQOkd/rEy3FxSiLDRfn2Lp5qJE/GeDvvnyMYCNYpvz1xBbvFtLoFGotkYmKqvMgZY9YIyCQ6z+QB80XE1RsEMutPUen"
+      },
+      "signature": null,
+      "passwordHistory": []
+    }
+  ]
+}

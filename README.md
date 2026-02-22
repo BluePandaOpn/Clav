@@ -30,6 +30,7 @@ Gestor de passwords profesional con:
 - Clasificacion automatica (4.2): login, tarjeta de credito, nota segura y API key
 - Auto-rotacion de credenciales (4.3): GitHub tokens, API keys y SSH keys con politica por entrada
 - Deteccion de patrones debiles (4.4): contrasenas parecidas, reutilizacion y secuencias comunes
+- Cofre compartido (5.1): compartir con familia/equipos/empresas con permisos lectura, escritura y temporal
 
 ## Requisitos
 
@@ -140,6 +141,12 @@ Prefix: `/api/v1/<API_NAMESPACE>`
 - `POST /backup/run`
 - `GET /rotation/due`
 - `POST /rotation/run-due`
+- `GET /shared-vaults`
+- `POST /shared-vaults`
+- `POST /shared-vaults/:id/members`
+- `DELETE /shared-vaults/:id/members/:memberId`
+- `POST /shared-vaults/:id/credentials`
+- `DELETE /shared-vaults/:id/credentials/:credentialId`
 
 Endpoint publico de vida:
 - `GET /healthz`

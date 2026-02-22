@@ -50,10 +50,24 @@ export default function SettingsPage({
   const [rotationCredentialId, setRotationCredentialId] = useState("");
   const [rotationEnabled, setRotationEnabled] = useState(true);
   const [rotationIntervalDays, setRotationIntervalDays] = useState(90);
+  const [sharedVaults, setSharedVaults] = useState([]);
+  const [sharedBusy, setSharedBusy] = useState(false);
+  const [sharedActor, setSharedActor] = useState("owner");
+  const [sharedVaultName, setSharedVaultName] = useState("");
+  const [sharedVaultAudience, setSharedVaultAudience] = useState("FAMILY");
+  const [selectedSharedVaultId, setSelectedSharedVaultId] = useState("");
+  const [sharedMemberActor, setSharedMemberActor] = useState("");
+  const [sharedMemberPermission, setSharedMemberPermission] = useState("READ");
+  const [sharedMemberExpiresHours, setSharedMemberExpiresHours] = useState(24);
+  const [sharedCredentialId, setSharedCredentialId] = useState("");
 
   useEffect(() => {
     loadSecurityData();
   }, []);
+
+  useEffect(() => {
+    loadSecurityData();
+  }, [sharedActor]);
 
   useEffect(() => {
     if (!qr?.challengeId) return undefined;
@@ -93,6 +107,8 @@ export default function SettingsPage({
         setRotationDueCount(rotation?.total || 0);
         setRotationDuePreview((rotation?.items || []).slice(0, 6));
       }
+      const sharedRes = await api.listSharedVaults(sharedActor || "owner");
+      setSharedVaults(sharedRes.items || []);
     } catch {
       // Silent by design in settings panel.
     }
@@ -366,6 +382,75 @@ export default function SettingsPage({
     }
   };
 
+  const createSharedVaultNow = async () => {
+    setSharedBusy(true);
+    try {
+      const payload = {
+        name: sharedVaultName || `${sharedVaultAudience.toLowerCase()} vault`,
+        audience: sharedVaultAudience,
+        owner: sharedActor || "owner"
+      };
+      const data = await api.createSharedVault(payload);
+      setSelectedSharedVaultId(data?.item?.id || "");
+      setSharedVaultName("");
+      await loadSecurityData();
+      pushToast("Cofre compartido creado", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setSharedBusy(false);
+    }
+  };
+
+  const addMemberToSharedVault = async () => {
+    if (!selectedSharedVaultId) {
+      pushToast("Selecciona un cofre compartido", "error");
+      return;
+    }
+    if (!sharedMemberActor.trim()) {
+      pushToast("Indica actor/usuario del miembro", "error");
+      return;
+    }
+    setSharedBusy(true);
+    try {
+      const payload = {
+        actor: sharedMemberActor.trim(),
+        permission: sharedMemberPermission
+      };
+      if (sharedMemberPermission === "TEMPORARY") {
+        payload.expiresInHours = Number(sharedMemberExpiresHours || 24);
+      }
+      await api.addSharedVaultMember(selectedSharedVaultId, payload);
+      setSharedMemberActor("");
+      await loadSecurityData();
+      pushToast("Miembro agregado/actualizado en cofre", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setSharedBusy(false);
+    }
+  };
+
+  const shareCredentialToVault = async () => {
+    if (!selectedSharedVaultId || !sharedCredentialId) {
+      pushToast("Selecciona cofre y credencial", "error");
+      return;
+    }
+    setSharedBusy(true);
+    try {
+      await api.addCredentialToSharedVault(selectedSharedVaultId, {
+        actor: sharedActor || "owner",
+        credentialId: sharedCredentialId
+      });
+      await loadSecurityData();
+      pushToast("Credencial compartida en cofre", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setSharedBusy(false);
+    }
+  };
+
   return (
     <section>
       <header className="page-head">
@@ -473,6 +558,96 @@ export default function SettingsPage({
       </div>
 
       <div className="panel settings-grid security-grid">
+        <article className="action-card">
+          <h3>5.1 Cofre compartido</h3>
+          <p>Comparte credenciales con familia, equipos o empresas con permisos por miembro.</p>
+          <label>
+            Actor actual (simulacion local)
+            <input value={sharedActor} onChange={(e) => setSharedActor(e.target.value)} placeholder="owner, ana, equipo-dev" />
+          </label>
+          <label>
+            Nombre del cofre
+            <input value={sharedVaultName} onChange={(e) => setSharedVaultName(e.target.value)} placeholder="Cofre familia" />
+          </label>
+          <label>
+            Tipo de cofre
+            <select value={sharedVaultAudience} onChange={(e) => setSharedVaultAudience(e.target.value)}>
+              <option value="FAMILY">Familia</option>
+              <option value="TEAM">Equipos</option>
+              <option value="COMPANY">Empresas</option>
+            </select>
+          </label>
+          <button className="primary-btn" type="button" onClick={createSharedVaultNow} disabled={sharedBusy}>
+            Crear cofre compartido
+          </button>
+          <label>
+            Cofre activo
+            <select value={selectedSharedVaultId} onChange={(e) => setSelectedSharedVaultId(e.target.value)}>
+              <option value="">Seleccionar...</option>
+              {sharedVaults.map((vault) => (
+                <option key={vault.id} value={vault.id}>
+                  {vault.name} ({vault.audience}) [{vault.permission || "sin acceso"}]
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Miembro (actor)
+            <input value={sharedMemberActor} onChange={(e) => setSharedMemberActor(e.target.value)} placeholder="maria@family" />
+          </label>
+          <label>
+            Permiso
+            <select value={sharedMemberPermission} onChange={(e) => setSharedMemberPermission(e.target.value)}>
+              <option value="READ">Solo lectura</option>
+              <option value="WRITE">Lectura/escritura</option>
+              <option value="TEMPORARY">Temporal</option>
+            </select>
+          </label>
+          {sharedMemberPermission === "TEMPORARY" ? (
+            <label>
+              Expira en horas
+              <input
+                type="number"
+                min="1"
+                max="720"
+                step="1"
+                value={sharedMemberExpiresHours}
+                onChange={(e) => setSharedMemberExpiresHours(Number(e.target.value || 24))}
+              />
+            </label>
+          ) : null}
+          <button className="icon-btn" type="button" onClick={addMemberToSharedVault} disabled={sharedBusy}>
+            Agregar/actualizar miembro
+          </button>
+          <label>
+            Credencial para compartir
+            <select value={sharedCredentialId} onChange={(e) => setSharedCredentialId(e.target.value)}>
+              <option value="">Seleccionar...</option>
+              {items.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.service} ({item.username || "sin usuario"})
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="primary-btn" type="button" onClick={shareCredentialToVault} disabled={sharedBusy}>
+            Compartir credencial en cofre
+          </button>
+          {selectedSharedVaultId ? (
+            <ul className="security-list">
+              {(sharedVaults.find((vault) => vault.id === selectedSharedVaultId)?.members || []).slice(0, 8).map((member) => (
+                <li key={member.id}>
+                  <strong>{member.actor}</strong>
+                  <small>
+                    {member.permission}
+                    {member.expiresAt ? ` (expira ${new Date(member.expiresAt).toLocaleString("es-ES")})` : ""}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </article>
+
         <article className="action-card">
           <h3>4.3 Auto-rotacion de credenciales</h3>
           <p>Rotacion para servicios compatibles: GitHub tokens, API keys y SSH keys.</p>

@@ -5,9 +5,12 @@ import rateLimit from "express-rate-limit";
 import { config } from "./config.js";
 import {
   addAuditLog,
+  addCredentialToSharedVault,
+  addSharedVaultMember,
   addTrustedDevice,
   clearCredentials,
   createCredentialSharePackage,
+  createSharedVault,
   createCredential,
   deleteCredential,
   generateHoneyCredentials,
@@ -15,9 +18,12 @@ import {
   listShareTargets,
   listAuditLogs,
   listCredentials,
+  listSharedVaults,
   listTrustedDevices,
   readStore,
   refreshCredentialBreachStatus,
+  removeCredentialFromSharedVault,
+  removeSharedVaultMember,
   registerHoneyCredentialAccess,
   rotateCredentialSecret,
   rotateDueCredentials,
@@ -73,6 +79,98 @@ app.get("/healthz", (_req, res) => {
 api.get("/health", (_req, res) => {
   res.json({ ok: true, layers: config.encryptionLayers });
 });
+
+api.get(
+  "/shared-vaults",
+  asyncHandler(async (req, res) => {
+    const actor = String(req.query.actor || "owner");
+    const items = await listSharedVaults(actor);
+    return res.json({ items });
+  })
+);
+
+api.post(
+  "/shared-vaults",
+  asyncHandler(async (req, res) => {
+    const { name, audience, owner } = req.body || {};
+    const item = await createSharedVault({ name, audience, owner });
+    await addAuditLog({
+      type: "SHARED_VAULT_CREATED",
+      detail: `${item.id}:${item.audience}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    return res.status(201).json({ item });
+  })
+);
+
+api.post(
+  "/shared-vaults/:id/members",
+  asyncHandler(async (req, res) => {
+    const item = await addSharedVaultMember(String(req.params.id), req.body || {});
+    if (!item) return res.status(404).json({ error: "shared vault not found" });
+    await addAuditLog({
+      type: "SHARED_VAULT_MEMBER_ADDED",
+      detail: `${item.id}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    return res.status(201).json({ item });
+  })
+);
+
+api.delete(
+  "/shared-vaults/:id/members/:memberId",
+  asyncHandler(async (req, res) => {
+    const item = await removeSharedVaultMember(String(req.params.id), String(req.params.memberId));
+    if (!item) return res.status(404).json({ error: "member not found" });
+    await addAuditLog({
+      type: "SHARED_VAULT_MEMBER_REMOVED",
+      detail: `${item.id}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    return res.json({ item });
+  })
+);
+
+api.post(
+  "/shared-vaults/:id/credentials",
+  asyncHandler(async (req, res) => {
+    const actor = String(req.body?.actor || "owner");
+    const credentialId = String(req.body?.credentialId || "");
+    if (!credentialId) return res.status(400).json({ error: "credentialId is required" });
+    const item = await addCredentialToSharedVault(String(req.params.id), credentialId, actor);
+    if (!item) return res.status(404).json({ error: "shared vault not found" });
+    await addAuditLog({
+      type: "SHARED_VAULT_CREDENTIAL_ADDED",
+      detail: `${item.id}:${credentialId}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    return res.status(201).json({ item });
+  })
+);
+
+api.delete(
+  "/shared-vaults/:id/credentials/:credentialId",
+  asyncHandler(async (req, res) => {
+    const actor = String(req.query.actor || "owner");
+    const item = await removeCredentialFromSharedVault(
+      String(req.params.id),
+      String(req.params.credentialId),
+      actor
+    );
+    if (!item) return res.status(404).json({ error: "shared vault not found" });
+    await addAuditLog({
+      type: "SHARED_VAULT_CREDENTIAL_REMOVED",
+      detail: `${item.id}:${req.params.credentialId}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    return res.json({ item });
+  })
+);
 
 api.get(
   "/backup/config",

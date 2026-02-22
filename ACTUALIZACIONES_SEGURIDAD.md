@@ -169,6 +169,29 @@ Fecha: 2026-02-22
   - Listado de credenciales afectadas con motivo detectado.
   - Top de pares de credenciales con alta similitud.
 
+## 5.1 - Cofre compartido
+
+- Cofres compartidos por contexto:
+  - `FAMILY`
+  - `TEAM`
+  - `COMPANY`
+- Permisos por miembro:
+  - `READ` (solo lectura)
+  - `WRITE` (lectura/escritura)
+  - `TEMPORARY` (acceso temporal con expiracion)
+- Soporte para compartir y retirar credenciales dentro de un cofre.
+- Integracion en `Settings` para:
+  - Crear cofre.
+  - Gestionar miembros y permisos.
+  - Compartir credenciales existentes al cofre.
+- Endpoints:
+  - `GET /shared-vaults`
+  - `POST /shared-vaults`
+  - `POST /shared-vaults/:id/members`
+  - `DELETE /shared-vaults/:id/members/:memberId`
+  - `POST /shared-vaults/:id/credentials`
+  - `DELETE /shared-vaults/:id/credentials/:credentialId`
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

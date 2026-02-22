@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "3.2.0",
+  "shardMode": "metadata-crypto-entries",
+  "createdAt": "2026-02-22T14:50:08.678Z",
+  "updatedAt": "2026-02-22T14:50:08.678Z",
+  "stats": {
+    "credentialsEntries": 1,
+    "credentialsCrypto": 1,
+    "trustedDevices": 2,
+    "auditLogs": 6,
+    "sharedVaults": 0
+  }
+}

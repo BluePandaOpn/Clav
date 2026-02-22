@@ -14,6 +14,43 @@ export const api = {
     const query = q ? `?q=${encodeURIComponent(q)}` : "";
     return request(`${API_BASE}/credentials${query}`);
   },
+  async listSharedVaults(actor = "owner") {
+    return request(`${API_BASE}/shared-vaults?actor=${encodeURIComponent(actor)}`);
+  },
+  async createSharedVault(payload) {
+    return request(`${API_BASE}/shared-vaults`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async addSharedVaultMember(vaultId, payload) {
+    return request(`${API_BASE}/shared-vaults/${vaultId}/members`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async removeSharedVaultMember(vaultId, memberId) {
+    return request(`${API_BASE}/shared-vaults/${vaultId}/members/${memberId}`, {
+      method: "DELETE"
+    });
+  },
+  async addCredentialToSharedVault(vaultId, payload) {
+    return request(`${API_BASE}/shared-vaults/${vaultId}/credentials`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async removeCredentialFromSharedVault(vaultId, credentialId, actor = "owner") {
+    return request(
+      `${API_BASE}/shared-vaults/${vaultId}/credentials/${credentialId}?actor=${encodeURIComponent(actor)}`,
+      {
+        method: "DELETE"
+      }
+    );
+  },
   async createCredential(payload) {
     return request(`${API_BASE}/credentials`, {
       method: "POST",

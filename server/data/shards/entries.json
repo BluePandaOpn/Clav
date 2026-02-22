@@ -1,0 +1,89 @@
+{
+  "credentials": [
+    {
+      "id": "8277addc-09b2-4bef-89c6-d501c3828054",
+      "service": "GitHub",
+      "username": "Pato404",
+      "category": "General",
+      "notes": "Password ",
+      "createdAt": "2026-02-22T13:08:14.641Z",
+      "updatedAt": "2026-02-22T13:08:14.641Z",
+      "breachStatus": {
+        "compromised": false,
+        "pwnedCount": 0,
+        "sources": [],
+        "checkedAt": "2026-02-22T14:07:14.274Z",
+        "hibpError": null
+      }
+    }
+  ],
+  "trustedDevices": [
+    {
+      "id": "fef9c659-a3eb-4735-bf1f-84e93caaaba7",
+      "label": "mobile-scanner",
+      "ip": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      "source": "qr_unlock",
+      "createdAt": "2026-02-22T14:07:42.946Z"
+    },
+    {
+      "id": "680a8bf8-69c7-4df7-b778-9421046f8670",
+      "label": "mobile-scanner",
+      "ip": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      "source": "qr_unlock",
+      "createdAt": "2026-02-22T13:03:18.486Z"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "ce47acfc-ba82-4ff3-b3e0-919e20a60624",
+      "type": "QR_CHALLENGE_APPROVED",
+      "detail": "91263066-fbed-49a6-bd03-eb21ad57b1aa",
+      "ip": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      "createdAt": "2026-02-22T14:07:42.949Z"
+    },
+    {
+      "id": "27292e63-aaab-4075-8b6a-a8874c4e100c",
+      "type": "QR_CHALLENGE_CREATED",
+      "detail": "91263066-fbed-49a6-bd03-eb21ad57b1aa",
+      "ip": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      "createdAt": "2026-02-22T14:07:35.110Z"
+    },
+    {
+      "id": "25938c72-9c96-4faa-b082-5c9f21c44be2",
+      "type": "QR_CHALLENGE_CREATED",
+      "detail": "2798d60c-da6e-4ce0-850f-3a3a1de20293",
+      "ip": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      "createdAt": "2026-02-22T13:08:56.141Z"
+    },
+    {
+      "id": "ebec4cf4-e430-4f88-8498-cfa701a6ea58",
+      "type": "CREDENTIAL_CREATED",
+      "detail": "GitHub",
+      "ip": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      "createdAt": "2026-02-22T13:08:17.057Z"
+    },
+    {
+      "id": "275d406c-bd7a-459e-8448-620239ec142d",
+      "type": "QR_CHALLENGE_APPROVED",
+      "detail": "5d15cfb4-7052-489f-bf50-427a06e5814d",
+      "ip": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      "createdAt": "2026-02-22T13:03:18.489Z"
+    },
+    {
+      "id": "b544edaa-7e74-48b9-9a1b-47a28e2a9f8d",
+      "type": "QR_CHALLENGE_CREATED",
+      "detail": "5d15cfb4-7052-489f-bf50-427a06e5814d",
+      "ip": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      "createdAt": "2026-02-22T13:03:05.262Z"
+    }
+  ],
+  "sharedVaults": []
+}
