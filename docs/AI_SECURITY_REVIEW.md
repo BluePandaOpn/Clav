@@ -1,103 +1,126 @@
-# AI Security Review Guide
+# AI Security Review
 
-Guia para que una IA (o auditor tecnico) revise vulnerabilidades y calidad del codigo de este proyecto completo.
+Guia para que una IA (o auditor humano) revise vulnerabilidades y calidad del codigo de todo el proyecto.
 
-## 1. Alcance de la revision
+## 1. Alcance obligatorio
 
-Revisar todo el repo:
-- `server/` (API, auth, cifrado, storage, schedulers).
-- `src/` (UI, seguridad cliente, manejo offline, sync).
-- `browser-extension/` (si aplica en auditoria).
-- configuraciones, dependencias y flujos de datos sensibles.
+Revisar de punta a punta:
 
-## 2. Objetivos de seguridad
+- `server/` (API, auth, permisos, crypto, persistence, schedulers).
+- `src/` (hooks de seguridad, estado, UI sensible, offline/sync).
+- `browser-extension/` (autocompletado y permisos del navegador).
+- Configuracion: `.env.example`, `package.json`, `vite.config.js`, `eslint.config.js`.
 
-Detectar:
+## 2. Objetivo de la auditoria
+
+Detectar riesgos explotables y deuda critica:
+
 - Broken access control.
-- Exposicion de secretos.
-- Criptografia insegura o mal usada.
-- Inyecciones y validacion insuficiente.
-- Riesgos de sincronizacion/offline y conflictos de datos.
-- Errores de logica en emergency/QR/shared vault.
-- Riesgos de privacidad (filtrado de datos en logs/eventos).
+- Cryptographic failures.
+- Exposure of secrets.
+- Input validation gaps e inyecciones.
+- Race conditions y data integrity bugs.
+- Flaws en offline/sync/shared/emergency/qr.
 
-## 3. Checklist tecnico (prioridad)
+## 3. Como usar esta guia con una IA
 
-### Critico
-- Endpoints sin control de identidad/autorizacion real.
-- Bypass en `shared vault` y `emergency access`.
-- Reuso/aceptacion de token QR ya consumido.
-- Exportacion o logs que incluyan passwords en claro.
-- Claves privadas persistidas sin proteccion suficiente.
+### Paso A: dar contexto
 
-### Alto
-- Validaciones de entrada incompletas.
-- Condiciones de carrera en store/schedulers.
-- Errores de expiracion temporal (`TEMPORARY`, emergency timeout).
-- Integridad de firma no aplicada en todos los paths.
+Pasar al modelo:
 
-### Medio
-- Falta de controles anti abuso (rate limit por endpoint sensible).
-- Manejo de errores que filtre detalles internos.
-- UX que permita acciones peligrosas sin confirmacion.
+- Este archivo (`docs/AI_SECURITY_REVIEW.md`).
+- `docs/SISTEMA_COMPLETO.md`.
+- Arbol del repo (`rg --files`).
 
-### Bajo
-- Deuda tecnica, duplicidad, inconsistencias de naming.
-- Falta de documentacion de decisiones de seguridad.
+### Paso B: pedir auditoria
 
-## 4. Prompts sugeridos para IA (copiar/pegar)
+Prompt sugerido:
 
-### Prompt 1: Auditoria OWASP completa
 ```text
-Revisa este repositorio como auditor senior de seguridad.
-Prioriza OWASP Top 10, cryptographic failures, access control y exposure of secrets.
-Entrega findings ordenados por severidad con archivo y linea.
-No describas arquitectura; enfocate en riesgos explotables y fixes concretos.
+Actua como security reviewer senior.
+Audita TODO el repositorio con foco en OWASP Top 10, crypto, access control y data integrity.
+Entrega findings por severidad (Critical, High, Medium, Low), con archivo y linea.
+Incluye exploit path, impacto y fix concreto.
+No des texto generico.
 ```
 
-### Prompt 2: Revisar permisos y control de acceso
-```text
-Analiza endpoints de server/index.js y logica en server/store.js.
-Busca bypass de permisos en shared vault, emergency access y operaciones de credenciales.
-Enumera casos de abuso posibles y parches minimos.
-```
+### Paso C: exigir formato estricto de salida
 
-### Prompt 3: Revisar criptografia y secretos
-```text
-Audita todo uso de crypto en server/ y src/hooks/useVaultSecurity.js.
-Verifica algoritmos, manejo de claves, firma, token lifecycle y almacenamiento de material sensible.
-Marca debilidades y propuestas de endurecimiento.
-```
+Formato esperado por finding:
 
-### Prompt 4: Revisar modo offline y sincronizacion
-```text
-Evalua useCredentials.js y flujos sync SSE/WS.
-Busca perdida de datos, operaciones duplicadas, corrupcion de estado, replay y conflictos.
-Propon tests y cambios para hardening.
-```
+1. `Severity`: Critical/High/Medium/Low
+2. `Title`
+3. `Evidence`: `ruta/archivo:linea`
+4. `Impact`
+5. `Exploit scenario`
+6. `Fix`
+7. `Test recomendado`
 
-## 5. Comandos recomendados de soporte
+## 4. Checklist tecnico por prioridad
+
+### Critical
+
+- Endpoints sensibles sin auth o sin autorizacion valida.
+- Bypass de permisos en shared vault o emergency access.
+- Exposicion de passwords/secrets en logs o respuestas API.
+- Reuso de token QR o tokens sin expiracion fuerte.
+- Uso incorrecto de crypto (nonce reuse, key handling inseguro).
+
+### High
+
+- Validaciones de payload insuficientes.
+- Falta de checks de integridad en rutas de update/delete.
+- Problemas de concurrencia en store/sync.
+- Riesgos de replay en sincronizacion.
+
+### Medium
+
+- Manejo de errores con leakage de detalles internos.
+- Falta de hardening adicional en endpoints de alto impacto.
+- Falta de limites de operacion en flujos de import/export.
+
+### Low
+
+- Inconsistencias de logging y observabilidad.
+- Deuda tecnica que complica auditorias futuras.
+
+## 5. Comandos utiles para la auditoria
 
 ```bash
 npm run lint
 npm run build
-rg -n "TODO|FIXME|password|token|secret|private|sign|verify|emergency|shared|offline|sync" src server
+rg -n "password|secret|token|key|encrypt|decrypt|sign|verify|auth|permission|shared|emergency|offline|sync|qr" src server browser-extension
+rg -n "TODO|FIXME|HACK" src server browser-extension
 ```
 
-## 6. Resultado esperado de una buena auditoria
+## 6. Auditoria enfocada por modulo
 
-Debe incluir:
-- Lista de vulnerabilidades con severidad (`Critical/High/Medium/Low`).
-- Evidencia con referencia de archivo/linea.
-- Impacto real y escenario de abuso.
-- Patch recomendado (tecnico, no generico).
-- Riesgos residuales y tests faltantes.
+- `server/index.js`: rutas, middlewares y controles de acceso.
+- `server/store.js`: operaciones criticas de datos e integridad.
+- `server/multilayer-crypto.js`: cifrado y lifecycle de material sensible.
+- `server/entry-signature.js`: firma/verificacion en alta, update y lectura.
+- `src/hooks/useCredentials.js`: cola offline, merge, retry, sync.
+- `src/hooks/useVaultSecurity.js`: estado de bloqueo y manejo de password maestra.
+- `browser-extension/*`: acceso a credenciales y proteccion de datos en cliente.
 
-## 7. Politica de correccion sugerida
+## 7. Criterio de salida minima
 
-1. Corregir `Critical`.
-2. Corregir `High`.
+Una auditoria NO esta completa si no incluye:
+
+- hallazgos con evidencia real,
+- severidad razonada,
+- impacto explotable,
+- fix implementable,
+- test de regresion propuesto.
+
+## 8. Flujo de remediacion recomendado
+
+1. Corregir todo `Critical`.
+2. Corregir todo `High`.
 3. Agregar tests de regresion.
-4. Re-ejecutar auditoria.
-5. Documentar cambios en `docs/README.md`.
+4. Re-ejecutar auditoria completa.
+5. Registrar cambios en `docs/SISTEMA_COMPLETO.md`.
 
+## 9. Nota para equipos
+
+Este documento esta pensado para auditorias periodicas (por release o sprint). Recomendado: ejecutar al menos una auditoria completa antes de cada release de produccion.
