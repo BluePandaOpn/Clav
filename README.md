@@ -14,6 +14,7 @@ Gestor de passwords profesional con:
 - Hardening base: `helmet`, `express-rate-limit`, limites de payload
 - QR unlock de un solo uso con expiracion corta y firma HMAC
 - Registro automatico de dispositivos confiables + bitacora de seguridad
+- Autenticacion basada en hardware (0.1.3): WebAuthn/Passkeys, YubiKey y NFC unlock experimental local
 
 ## Requisitos
 

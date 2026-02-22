@@ -5,6 +5,7 @@ const CHECK_KEY = "vault_master_check_v1";
 const DATA_KEY = "vault_local_encrypted_v1";
 const DEVICE_ID_KEY = "vault_device_id_v1";
 const DEVICE_KEYPAIR_KEY = "vault_device_keypair_enc_v1";
+const HARDWARE_AUTH_KEY = "vault_hardware_auth_v013";
 const CHECK_PLAINTEXT = "vault-check-ok";
 
 const encoder = new TextEncoder();
@@ -19,6 +20,10 @@ function bytesToBase64(bytes) {
   return btoa(binary);
 }
 
+function bytesToBase64Url(bytes) {
+  return bytesToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
 function base64ToBytes(value) {
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
@@ -26,6 +31,12 @@ function base64ToBytes(value) {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes;
+}
+
+function base64UrlToBytes(value) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = normalized.length % 4 === 0 ? "" : "=".repeat(4 - (normalized.length % 4));
+  return base64ToBytes(`${normalized}${pad}`);
 }
 
 function base64ToArrayBuffer(value) {
@@ -43,6 +54,74 @@ function toPem(type, base64) {
 
 function fromPem(pem) {
   return pem.replace(/-----BEGIN [^-]+-----/g, "").replace(/-----END [^-]+-----/g, "").replace(/\s+/g, "");
+}
+
+function getDefaultHardwareConfig() {
+  return {
+    webauthn: {
+      credentials: []
+    },
+    nfc: {
+      secretHash: null,
+      createdAt: null
+    }
+  };
+}
+
+function readHardwareConfig() {
+  const raw = localStorage.getItem(HARDWARE_AUTH_KEY);
+  if (!raw) return getDefaultHardwareConfig();
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      webauthn: {
+        credentials: Array.isArray(parsed?.webauthn?.credentials) ? parsed.webauthn.credentials : []
+      },
+      nfc: {
+        secretHash: parsed?.nfc?.secretHash || null,
+        createdAt: parsed?.nfc?.createdAt || null
+      }
+    };
+  } catch {
+    return getDefaultHardwareConfig();
+  }
+}
+
+function hasWebAuthnSupport() {
+  return typeof window !== "undefined" && typeof window.PublicKeyCredential === "function" && !!navigator.credentials;
+}
+
+function hasNfcSupport() {
+  return typeof window !== "undefined" && typeof window.NDEFReader === "function";
+}
+
+function buildHardwareState(config) {
+  return {
+    supportsWebAuthn: hasWebAuthnSupport(),
+    supportsNfc: hasNfcSupport(),
+    webauthnCredentials: config.webauthn.credentials,
+    nfcEnabled: Boolean(config.nfc.secretHash)
+  };
+}
+
+function randomBytes(size) {
+  return crypto.getRandomValues(new Uint8Array(size));
+}
+
+async function sha256Base64Url(text) {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(text));
+  return bytesToBase64Url(new Uint8Array(digest));
+}
+
+function readNfcText(message) {
+  if (!message?.records?.length) return "";
+  for (const record of message.records) {
+    if (record.recordType === "text" || record.mediaType === "text/plain") {
+      const text = decoder.decode(record.data || new Uint8Array());
+      return text.replace(/^KVUNLOCK:/i, "").trim();
+    }
+  }
+  return "";
 }
 
 async function deriveAesKey(password, saltBytes) {
@@ -89,6 +168,7 @@ export function useVaultSecurity() {
   const [configured, setConfigured] = useState(
     Boolean(localStorage.getItem(SALT_KEY) && localStorage.getItem(CHECK_KEY))
   );
+  const [hardwareState, setHardwareState] = useState(() => buildHardwareState(readHardwareConfig()));
 
   const setupMasterPassword = useCallback(async (password) => {
     const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -241,6 +321,204 @@ export function useVaultSecurity() {
     [cryptoKey]
   );
 
+  const persistHardwareConfig = useCallback((nextConfig) => {
+    localStorage.setItem(HARDWARE_AUTH_KEY, JSON.stringify(nextConfig));
+    setHardwareState(buildHardwareState(nextConfig));
+  }, []);
+
+  const registerHardwareCredential = useCallback(
+    async ({ label = "passkey", kind = "passkey" } = {}) => {
+      if (!hasWebAuthnSupport()) {
+        throw new Error("WebAuthn no esta disponible en este navegador/dispositivo.");
+      }
+
+      const config = readHardwareConfig();
+      const excludeCredentials = config.webauthn.credentials.map((item) => ({
+        id: base64UrlToBytes(item.id),
+        type: "public-key"
+      }));
+
+      const created = await navigator.credentials.create({
+        publicKey: {
+          challenge: randomBytes(32),
+          rp: { name: "Password Manager Pro" },
+          user: {
+            id: randomBytes(16),
+            name: `vault-user-${Date.now()}`,
+            displayName: "Vault User"
+          },
+          pubKeyCredParams: [
+            { type: "public-key", alg: -7 },
+            { type: "public-key", alg: -257 }
+          ],
+          timeout: 60000,
+          attestation: "none",
+          authenticatorSelection: {
+            residentKey: "preferred",
+            userVerification: "preferred",
+            ...(kind === "yubikey" ? { authenticatorAttachment: "cross-platform" } : {})
+          },
+          excludeCredentials
+        }
+      });
+
+      if (!created || !created.rawId) {
+        throw new Error("No se pudo registrar la credencial hardware.");
+      }
+
+      const id = bytesToBase64Url(new Uint8Array(created.rawId));
+      const next = {
+        ...config,
+        webauthn: {
+          credentials: [
+            ...config.webauthn.credentials.filter((item) => item.id !== id),
+            {
+              id,
+              label: (label || kind).trim(),
+              kind,
+              createdAt: new Date().toISOString()
+            }
+          ]
+        }
+      };
+
+      persistHardwareConfig(next);
+      return id;
+    },
+    [persistHardwareConfig]
+  );
+
+  const authenticateHardwareCredential = useCallback(async (kind = null) => {
+    if (!hasWebAuthnSupport()) {
+      throw new Error("WebAuthn no esta disponible en este navegador/dispositivo.");
+    }
+
+    const config = readHardwareConfig();
+    const credentials = kind
+      ? config.webauthn.credentials.filter((item) => item.kind === kind)
+      : config.webauthn.credentials;
+
+    if (credentials.length === 0) {
+      throw new Error("No hay credenciales hardware registradas para autenticar.");
+    }
+
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge: randomBytes(32),
+        allowCredentials: credentials.map((item) => ({
+          id: base64UrlToBytes(item.id),
+          type: "public-key"
+        })),
+        timeout: 60000,
+        userVerification: "preferred"
+      }
+    });
+
+    if (!assertion || !assertion.rawId) {
+      throw new Error("Autenticacion hardware cancelada o no valida.");
+    }
+
+    const id = bytesToBase64Url(new Uint8Array(assertion.rawId));
+    return credentials.find((item) => item.id === id) || { id, label: "hardware-key", kind: kind || "passkey" };
+  }, []);
+
+  const setupNfcUnlockSecret = useCallback(
+    async (secret) => {
+      const normalized = (secret || "").trim();
+      if (normalized.length < 8) {
+        throw new Error("El token NFC debe tener al menos 8 caracteres.");
+      }
+
+      const hash = await sha256Base64Url(normalized);
+      const config = readHardwareConfig();
+      const next = {
+        ...config,
+        nfc: {
+          secretHash: hash,
+          createdAt: new Date().toISOString()
+        }
+      };
+      persistHardwareConfig(next);
+    },
+    [persistHardwareConfig]
+  );
+
+  const clearNfcUnlockSecret = useCallback(() => {
+    const config = readHardwareConfig();
+    const next = {
+      ...config,
+      nfc: {
+        secretHash: null,
+        createdAt: null
+      }
+    };
+    persistHardwareConfig(next);
+  }, [persistHardwareConfig]);
+
+  const verifyNfcUnlock = useCallback(async ({ timeoutMs = 30000 } = {}) => {
+    if (!hasNfcSupport()) {
+      throw new Error("NFC Web API no esta disponible en este navegador/dispositivo.");
+    }
+    const config = readHardwareConfig();
+    if (!config.nfc.secretHash) {
+      throw new Error("Configura primero un token NFC en Settings.");
+    }
+
+    const Reader = window.NDEFReader;
+    const reader = new Reader();
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let timerId = null;
+
+      const cleanup = () => {
+        if (timerId) window.clearTimeout(timerId);
+        reader.removeEventListener("reading", onReading);
+        reader.removeEventListener("readingerror", onReadingError);
+      };
+
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      };
+
+      const onReading = async (event) => {
+        try {
+          const text = readNfcText(event.message);
+          if (!text) return;
+          const incomingHash = await sha256Base64Url(text);
+          finish(incomingHash === config.nfc.secretHash);
+        } catch (error) {
+          fail(error);
+        }
+      };
+
+      const onReadingError = () => {
+        fail(new Error("No se pudo leer la etiqueta NFC."));
+      };
+
+      reader
+        .scan()
+        .then(() => {
+          reader.addEventListener("reading", onReading);
+          reader.addEventListener("readingerror", onReadingError);
+          timerId = window.setTimeout(() => finish(false), timeoutMs);
+        })
+        .catch(() => {
+          fail(new Error("No se pudo iniciar el escaneo NFC."));
+        });
+    });
+  }, []);
+
   return {
     isConfigured: configured,
     isUnlocked: ready,
@@ -250,6 +528,12 @@ export function useVaultSecurity() {
     saveEncryptedVault,
     loadEncryptedVault,
     ensureDeviceKeyPair,
-    decryptSharedPackage
+    decryptSharedPackage,
+    hardwareState,
+    registerHardwareCredential,
+    authenticateHardwareCredential,
+    setupNfcUnlockSecret,
+    clearNfcUnlockSecret,
+    verifyNfcUnlock
   };
 }

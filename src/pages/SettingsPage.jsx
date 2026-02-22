@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Copy, Download, Lock, Shield, Trash } from "lucide-react";
+import { Copy, Download, KeyRound, Lock, Shield, Smartphone, Trash, Usb } from "lucide-react";
 import { api } from "../utils/api.js";
 
 export default function SettingsPage({ clearAll, pushToast, items, security, addItem }) {
@@ -13,6 +13,10 @@ export default function SettingsPage({ clearAll, pushToast, items, security, add
   const [selectedTargetDeviceId, setSelectedTargetDeviceId] = useState("");
   const [sharePackageText, setSharePackageText] = useState("");
   const [incomingPackageText, setIncomingPackageText] = useState("");
+  const [passkeyLabel, setPasskeyLabel] = useState("Passkey principal");
+  const [yubiKeyLabel, setYubiKeyLabel] = useState("YubiKey");
+  const [nfcToken, setNfcToken] = useState("");
+  const [hardwareBusy, setHardwareBusy] = useState(false);
 
   useEffect(() => {
     loadSecurityData();
@@ -157,6 +161,82 @@ export default function SettingsPage({ clearAll, pushToast, items, security, add
     pushToast("URL QR copiada", "success");
   };
 
+  const registerPasskey = async () => {
+    setHardwareBusy(true);
+    try {
+      await security.registerHardwareCredential({ label: passkeyLabel, kind: "passkey" });
+      pushToast("Passkey registrada", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setHardwareBusy(false);
+    }
+  };
+
+  const registerYubiKey = async () => {
+    setHardwareBusy(true);
+    try {
+      await security.registerHardwareCredential({ label: yubiKeyLabel, kind: "yubikey" });
+      pushToast("YubiKey registrada", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setHardwareBusy(false);
+    }
+  };
+
+  const testHardwareAuth = async () => {
+    setHardwareBusy(true);
+    try {
+      const auth = await security.authenticateHardwareCredential();
+      pushToast(`Autenticacion OK: ${auth.label}`, "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setHardwareBusy(false);
+    }
+  };
+
+  const saveNfcToken = async () => {
+    setHardwareBusy(true);
+    try {
+      await security.setupNfcUnlockSecret(nfcToken);
+      setNfcToken("");
+      pushToast("Token NFC guardado", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setHardwareBusy(false);
+    }
+  };
+
+  const testNfcUnlock = async () => {
+    setHardwareBusy(true);
+    try {
+      const ok = await security.verifyNfcUnlock();
+      if (!ok) {
+        throw new Error("Tag NFC leido, pero token invalido o timeout.");
+      }
+      pushToast("NFC unlock validado", "success");
+    } catch (error) {
+      pushToast(error.message, "error");
+    } finally {
+      setHardwareBusy(false);
+    }
+  };
+
+  const clearNfcToken = () => {
+    security.clearNfcUnlockSecret();
+    pushToast("Token NFC eliminado", "info");
+  };
+
+  const hardwareState = security.hardwareState || {
+    supportsWebAuthn: false,
+    supportsNfc: false,
+    webauthnCredentials: [],
+    nfcEnabled: false
+  };
+
   return (
     <section>
       <header className="page-head">
@@ -264,6 +344,95 @@ export default function SettingsPage({ clearAll, pushToast, items, security, add
       </div>
 
       <div className="panel settings-grid security-grid">
+        <article className="action-card">
+          <h3>0.1.3 Autenticacion basada en hardware</h3>
+          <p>WebAuthn/Passkeys, YubiKey y NFC unlock local experimental.</p>
+          <small className="muted">
+            WebAuthn: {hardwareState.supportsWebAuthn ? "compatible" : "no disponible"} | NFC:{" "}
+            {hardwareState.supportsNfc ? "compatible" : "no disponible"}
+          </small>
+          <label>
+            Passkey label
+            <input value={passkeyLabel} onChange={(e) => setPasskeyLabel(e.target.value)} />
+          </label>
+          <button
+            className="primary-btn"
+            type="button"
+            onClick={registerPasskey}
+            disabled={hardwareBusy || !hardwareState.supportsWebAuthn}
+          >
+            <KeyRound size={16} /> Registrar Passkey
+          </button>
+          <label>
+            YubiKey label
+            <input value={yubiKeyLabel} onChange={(e) => setYubiKeyLabel(e.target.value)} />
+          </label>
+          <button
+            className="primary-btn"
+            type="button"
+            onClick={registerYubiKey}
+            disabled={hardwareBusy || !hardwareState.supportsWebAuthn}
+          >
+            <Usb size={16} /> Registrar YubiKey
+          </button>
+          <button
+            className="primary-btn"
+            type="button"
+            onClick={testHardwareAuth}
+            disabled={hardwareBusy || !hardwareState.supportsWebAuthn}
+          >
+            <Shield size={16} /> Probar autenticacion hardware
+          </button>
+          <label>
+            Token NFC (se guarda hash local)
+            <input
+              value={nfcToken}
+              onChange={(e) => setNfcToken(e.target.value)}
+              placeholder="Ejemplo: KVUNLOCK:mi-token-seguro"
+            />
+          </label>
+          <div className="inline-actions">
+            <button
+              className="primary-btn"
+              type="button"
+              onClick={saveNfcToken}
+              disabled={hardwareBusy}
+            >
+              <Smartphone size={16} /> Guardar token NFC
+            </button>
+            <button
+              className="icon-btn"
+              type="button"
+              onClick={clearNfcToken}
+              disabled={hardwareBusy || !hardwareState.nfcEnabled}
+            >
+              Limpiar token
+            </button>
+          </div>
+          <button
+            className="primary-btn"
+            type="button"
+            onClick={testNfcUnlock}
+            disabled={hardwareBusy || !hardwareState.supportsNfc || !hardwareState.nfcEnabled}
+          >
+            <Smartphone size={16} /> Probar NFC unlock
+          </button>
+          {hardwareState.webauthnCredentials.length > 0 ? (
+            <ul className="security-list">
+              {hardwareState.webauthnCredentials.map((item) => (
+                <li key={item.id}>
+                  <strong>
+                    {item.label} ({item.kind})
+                  </strong>
+                  <small>{new Date(item.createdAt).toLocaleString("es-ES")}</small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">Sin credenciales hardware registradas.</p>
+          )}
+        </article>
+
         <article className="action-card">
           <h3>Dispositivos autorizados</h3>
           {devices.length === 0 ? <p className="muted">Sin dispositivos registrados.</p> : null}

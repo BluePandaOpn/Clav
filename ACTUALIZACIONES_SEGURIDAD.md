@@ -2,6 +2,13 @@
 
 Fecha: 2026-02-22
 
+## 0.1.3 - Autenticacion basada en hardware
+
+- WebAuthn / Passkeys para registrar y autenticar credenciales locales.
+- Registro de llaves tipo YubiKey usando `authenticatorAttachment: "cross-platform"`.
+- NFC unlock experimental en cliente (validacion por hash de token local con lectura Web NFC).
+- Integracion en `Settings` para alta, prueba y estado de compatibilidad por navegador/dispositivo.
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).
