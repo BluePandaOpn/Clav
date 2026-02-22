@@ -13,6 +13,10 @@ import {
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
 import { getStrengthLabel } from "../utils/password.js";
 import { api } from "../utils/api.js";
+import Card from "../components/ui/Card.jsx";
+import ListItem from "../components/ui/ListItem.jsx";
+import Tag from "../components/ui/Tag.jsx";
+import StrengthMeter from "../components/ui/StrengthMeter.jsx";
 
 const CATEGORY_DEFS = [
   { key: "ALL", label: "Todo" },
@@ -272,11 +276,11 @@ export default function VaultPage({
       </header>
 
       <div className="vault-layout-062">
-        <aside className="panel vault-categories">
+        <Card as="aside" className="vault-categories">
           <h3>Categorias</h3>
           <ul className="vault-category-list">
             {CATEGORY_DEFS.map((cat) => (
-              <li key={cat.key}>
+              <ListItem key={cat.key}>
                 <button
                   type="button"
                   className={`vault-category-btn ${activeCategory === cat.key ? "active" : ""}`}
@@ -285,7 +289,7 @@ export default function VaultPage({
                   <span>{cat.label}</span>
                   <small>{counts[cat.key] || 0}</small>
                 </button>
-              </li>
+              </ListItem>
             ))}
           </ul>
           <button className="primary-btn vault-add-btn" type="button" onClick={() => setShowAddForm((v) => !v)}>
@@ -314,9 +318,9 @@ export default function VaultPage({
               </button>
             </form>
           ) : null}
-        </aside>
+        </Card>
 
-        <section className="panel vault-list-panel">
+        <Card as="section" className="vault-list-panel">
           <div className="vault-list-toolbar">
             <input
               className="vault-inline-search"
@@ -377,9 +381,9 @@ export default function VaultPage({
                     </div>
                     <div className="entry-tags">
                       {extractTags(item).slice(0, 3).map((tag) => (
-                        <span key={`${item.id}-${tag}`} className="tag-chip">
+                        <Tag key={`${item.id}-${tag}`}>
                           {tag}
-                        </span>
+                        </Tag>
                       ))}
                     </div>
                   </button>
@@ -416,9 +420,9 @@ export default function VaultPage({
                         <td>
                           <div className="table-tags">
                             {extractTags(item).slice(0, 2).map((tag) => (
-                              <span key={`${item.id}-${tag}`} className="tag-chip">
+                              <Tag key={`${item.id}-${tag}`}>
                                 {tag}
-                              </span>
+                              </Tag>
                             ))}
                           </div>
                         </td>
@@ -429,9 +433,9 @@ export default function VaultPage({
               </table>
             </div>
           )}
-        </section>
+        </Card>
 
-        <aside className="panel vault-detail-panel">
+        <Card as="aside" className="vault-detail-panel">
           {!selectedItem ? (
             <p className="muted">Selecciona una entrada para ver detalle.</p>
           ) : (
@@ -441,7 +445,7 @@ export default function VaultPage({
                   <h3>{selectedItem.service}</h3>
                   <p className="muted">{selectedItem.category}</p>
                 </div>
-                <span className="badge">{getTypeMeta(selectedItem.entryType).label}</span>
+                <Tag className="badge">{getTypeMeta(selectedItem.entryType).label}</Tag>
               </header>
 
               <section className="detail-block">
@@ -464,18 +468,16 @@ export default function VaultPage({
 
               <section className="detail-block">
                 <strong>Fortaleza</strong>
-                <span className={`strength-pill ${getStrengthLabel(selectedItem.password || "").toLowerCase()}`}>
-                  {getStrengthLabel(selectedItem.password || "")}
-                </span>
+                <StrengthMeter value={selectedItem.password || ""} />
               </section>
 
               <section className="detail-block">
                 <strong>Tags</strong>
                 <div className="detail-tags">
                   {extractTags(selectedItem).map((tag) => (
-                    <span key={`${selectedItem.id}-${tag}`} className="tag-chip">
+                    <Tag key={`${selectedItem.id}-${tag}`}>
                       {tag}
-                    </span>
+                    </Tag>
                   ))}
                 </div>
               </section>
@@ -534,11 +536,11 @@ export default function VaultPage({
                   <h4>Historial</h4>
                   <ul className="security-list">
                     {(history.changes || []).slice(0, 8).map((entry, index) => (
-                      <li key={`history-${selectedItem.id}-${index}`}>
+                      <ListItem key={`history-${selectedItem.id}-${index}`}>
                         <strong>{entry.type}</strong>
                         <small>{new Date(entry.at).toLocaleString("es-ES")}</small>
                         <small>{Array.isArray(entry.fields) ? entry.fields.join(", ") : ""}</small>
-                      </li>
+                      </ListItem>
                     ))}
                   </ul>
                 </section>
@@ -553,7 +555,7 @@ export default function VaultPage({
               </button>
             </>
           )}
-        </aside>
+        </Card>
       </div>
     </section>
   );

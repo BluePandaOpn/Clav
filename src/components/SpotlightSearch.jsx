@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Command, FilePlus2, KeyRound, Pencil, Search } from "lucide-react";
+import Modal from "./ui/Modal.jsx";
+import Tag from "./ui/Tag.jsx";
 
 const TYPE_FILTERS = [
   { key: "ALL", label: "Todo" },
@@ -86,8 +88,7 @@ export default function SpotlightSearch({ open, items, onClose, onOpenCreate, on
   if (!open) return null;
 
   return (
-    <div className="spotlight-overlay" onClick={onClose}>
-      <section className="spotlight-panel" onClick={(event) => event.stopPropagation()}>
+    <Modal open={open} onClose={onClose} overlayClassName="spotlight-overlay" panelClassName="spotlight-panel">
         <header className="spotlight-head">
           <div className="spotlight-input-wrap">
             <Search size={16} />
@@ -165,7 +166,7 @@ export default function SpotlightSearch({ open, items, onClose, onOpenCreate, on
                   <strong>{item.service}</strong>
                   <small>{item.username || "sin usuario"}</small>
                 </div>
-                <span className="badge">{String(item.entryType || "LOGIN").toUpperCase()}</span>
+                <Tag className="badge">{String(item.entryType || "LOGIN").toUpperCase()}</Tag>
               </button>
             </li>
           ))}
@@ -176,7 +177,6 @@ export default function SpotlightSearch({ open, items, onClose, onOpenCreate, on
             <Command size={12} /> Ctrl/Cmd + K
           </span>
         </footer>
-      </section>
-    </div>
+    </Modal>
   );
 }

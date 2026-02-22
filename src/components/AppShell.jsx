@@ -12,6 +12,8 @@ import {
   Search
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
+import Sidebar from "./ui/Sidebar.jsx";
+import Topbar from "./ui/Topbar.jsx";
 
 const links = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -41,7 +43,7 @@ export default function AppShell({ children, offlineMode = false, pendingSyncCou
 
   return (
     <div className="app-root">
-      <aside className="sidebar fixed-sidebar">
+      <Sidebar className="fixed-sidebar">
         <div className="brand">
           <div className="brand-logo">
             <Command size={20} />
@@ -70,9 +72,9 @@ export default function AppShell({ children, offlineMode = false, pendingSyncCou
             );
           })}
         </nav>
-      </aside>
+      </Sidebar>
       <main className="content app-content">
-        <header className="topbar">
+        <Topbar>
           <form className="topbar-search" onSubmit={submitGlobalSearch}>
             <Search size={15} />
             <input name="global_search" placeholder="Buscar en el vault..." />
@@ -89,7 +91,7 @@ export default function AppShell({ children, offlineMode = false, pendingSyncCou
             </span>
             <div className="avatar-chip">US</div>
           </div>
-        </header>
+        </Topbar>
         {children}
       </main>
     </div>
