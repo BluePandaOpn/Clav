@@ -37,6 +37,17 @@ Fecha: 2026-02-22
 - Bloqueo inmediato cuando el mouse sale de la ventana.
 - Integracion en `Settings` para activar/desactivar, definir minutos de inactividad y segundos de gracia.
 
+## 0.2.1 - Autocompletado estilo Bitwarden
+
+- Se agrega extension de navegador en `browser-extension/`.
+- Compatibilidad WebExtension para:
+  - Chrome
+  - Firefox
+  - Edge
+- Popup con busqueda de credenciales por dominio/servicio/usuario.
+- Autocompletado sobre formulario activo (usuario + password) en la pestana actual.
+- Configuracion de `API base` desde el popup para apuntar al backend local.
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

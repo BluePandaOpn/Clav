@@ -18,6 +18,7 @@ Gestor de passwords profesional con:
 - Honey passwords (0.1.4): credenciales senuelo para deteccion de accesos no autorizados
 - Deteccion de brechas (0.1.5): HIBP + base local de filtradas y alertas automaticas
 - Auto-lock inteligente (0.1.6): bloqueo por inactividad, pestana, foco y salida de mouse
+- Autocompletado estilo Bitwarden (2.1): extension para Chrome/Firefox/Edge con llenado de login
 
 ## Requisitos
 
@@ -77,6 +78,24 @@ npm run preview:full
 npm run lint
 npm run format:check
 ```
+
+## Extension de navegador (2.1)
+
+Directorio: `browser-extension/`
+
+Incluye:
+- Popup para buscar credenciales por dominio/servicio/usuario.
+- Autocompletado en la pestana activa (usuario + password).
+- Compatible con Chrome, Firefox y Edge (WebExtension MV3).
+
+Carga local:
+- Chrome: `chrome://extensions` > `Modo desarrollador` > `Cargar descomprimida` > seleccionar `browser-extension`.
+- Edge: `edge://extensions` > `Developer mode` > `Load unpacked`.
+- Firefox: `about:debugging` > `This Firefox` > `Load Temporary Add-on` > seleccionar `browser-extension/manifest.json`.
+
+Configura en el popup:
+- `API base`: `http://localhost:4000/api/v1/<API_NAMESPACE>`
+- Ejemplo con este proyecto: `http://localhost:4000/api/v1/vault-x9f3k7s2m1q8n4z6t0p5r2d7c9`
 
 ## Endpoints API
 

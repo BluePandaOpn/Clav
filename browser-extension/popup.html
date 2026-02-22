@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Password Manager Pro Autofill</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="root">
+      <header>
+        <h1>Autofill 2.1</h1>
+        <p>Estilo Bitwarden para Chrome, Firefox y Edge.</p>
+      </header>
+
+      <section class="panel">
+        <label>
+          API base
+          <input id="apiBase" type="text" placeholder="http://localhost:4000/api/v1/..." />
+        </label>
+        <div class="row">
+          <button id="saveBtn" class="secondary">Guardar</button>
+          <button id="refreshBtn" class="primary">Actualizar</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <label>
+          Buscar credenciales
+          <input id="queryInput" type="text" placeholder="dominio, servicio o usuario" />
+        </label>
+        <small id="status" class="muted">Cargando...</small>
+      </section>
+
+      <section class="panel">
+        <ul id="results" class="list"></ul>
+      </section>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+  </html>
