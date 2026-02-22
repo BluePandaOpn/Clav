@@ -2,7 +2,18 @@ import { useEffect, useState } from "react";
 import { Copy, Download, KeyRound, Lock, SearchCheck, Shield, Smartphone, Trash, Usb } from "lucide-react";
 import { api } from "../utils/api.js";
 
-export default function SettingsPage({ clearAll, pushToast, items, security, addItem, scanCredentialBreaches }) {
+export default function SettingsPage({
+  clearAll,
+  pushToast,
+  items,
+  security,
+  addItem,
+  scanCredentialBreaches,
+  autoLockEnabled,
+  setAutoLockEnabled,
+  autoLockMinutes,
+  setAutoLockMinutes
+}) {
   const [qr, setQr] = useState(null);
   const [qrImage, setQrImage] = useState("");
   const [deviceLabel, setDeviceLabel] = useState("desktop-main");
@@ -254,6 +265,13 @@ export default function SettingsPage({ clearAll, pushToast, items, security, add
     }
   };
 
+  const onAutoLockMinutesChange = (value) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    const clamped = Math.max(0.25, Math.min(240, parsed));
+    setAutoLockMinutes?.(clamped);
+  };
+
   return (
     <section>
       <header className="page-head">
@@ -361,6 +379,32 @@ export default function SettingsPage({ clearAll, pushToast, items, security, add
       </div>
 
       <div className="panel settings-grid security-grid">
+        <article className="action-card">
+          <h3>0.1.6 Auto-lock inteligente</h3>
+          <p>Bloqueo automatico por inactividad, pestana oculta, perdida de foco y salida del mouse.</p>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={Boolean(autoLockEnabled)}
+              onChange={(e) => setAutoLockEnabled?.(e.target.checked)}
+            />
+            Activar auto-lock inteligente
+          </label>
+          <label>
+            Minutos de inactividad
+            <input
+              type="number"
+              min="0.25"
+              max="240"
+              step="0.25"
+              value={autoLockMinutes}
+              onChange={(e) => onAutoLockMinutesChange(e.target.value)}
+              disabled={!autoLockEnabled}
+            />
+          </label>
+          <small className="muted">Rango permitido: 0.25 a 240 minutos.</small>
+        </article>
+
         <article className="action-card">
           <h3>0.1.5 Deteccion de brechas</h3>
           <p>Integracion con HIBP + base local de passwords filtradas con alertas automaticas.</p>

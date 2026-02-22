@@ -29,6 +29,14 @@ Fecha: 2026-02-22
   - `POST /breach/check/:id`
   - `POST /breach/scan`
 
+## 0.1.6 - Auto-lock inteligente
+
+- Bloqueo automatico por inactividad con timeout configurable.
+- Bloqueo inmediato al ocultar/cambiar de pestana.
+- Bloqueo inmediato por perdida de foco de ventana.
+- Bloqueo inmediato cuando el mouse sale de la ventana.
+- Integracion en `Settings` para activar/desactivar y definir minutos de inactividad.
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

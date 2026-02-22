@@ -17,6 +17,7 @@ Gestor de passwords profesional con:
 - Autenticacion basada en hardware (0.1.3): WebAuthn/Passkeys, YubiKey y NFC unlock experimental local
 - Honey passwords (0.1.4): credenciales senuelo para deteccion de accesos no autorizados
 - Deteccion de brechas (0.1.5): HIBP + base local de filtradas y alertas automaticas
+- Auto-lock inteligente (0.1.6): bloqueo por inactividad, pestana, foco y salida de mouse
 
 ## Requisitos
 
