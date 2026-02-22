@@ -1,6 +1,18 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap");
 
 :root {
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --duration-fast: 220ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
   --bg: #ffffff;
   --fg: #0f172a;
   --border: #e2e8f0;
@@ -10,7 +22,7 @@
   --success: #0f766e;
   --warning: #b45309;
   --danger: #be123c;
-  --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --shadow: 0 8px 24px rgba(15, 23, 42, 0.07);
   --weak: #be123c;
   --medium: #b45309;
   --strong: #0f766e;
@@ -18,16 +30,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0a0a0a;
-    --fg: #ffffff;
-    --border: #262626;
-    --muted: #a1a1aa;
+    --bg: #080b12;
+    --fg: #f8fafc;
+    --border: #334155;
+    --muted: #cbd5e1;
     --accent: #ffffff;
-    --subtle: #171717;
+    --subtle: #111827;
     --success: #2dd4bf;
     --warning: #f59e0b;
     --danger: #fb7185;
-    --shadow: 0 18px 36px rgba(0, 0, 0, 0.35);
+    --shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
     --weak: #fb7185;
     --medium: #f59e0b;
     --strong: #2dd4bf;
@@ -40,12 +52,28 @@
 
 body {
   margin: 0;
-  font-family: "Inter", sans-serif;
+  font-family: var(--font-sans);
   line-height: 1.5;
+  letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   color: var(--fg);
   background: radial-gradient(circle at 20% 0%, rgba(148, 163, 184, 0.18), transparent 34%), var(--bg);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: -0.01em;
+}
+
+small {
+  line-height: 1.35;
+}
+
+.lucide {
+  transition: color var(--duration-fast) var(--easing-standard);
 }
 
 .app-root {
@@ -55,7 +83,7 @@ body {
 
 .sidebar {
   border-right: 1px solid var(--border);
-  padding: 18px;
+  padding: var(--space-4);
   background: color-mix(in srgb, var(--subtle) 75%, transparent);
   backdrop-filter: blur(6px);
 }
@@ -71,9 +99,9 @@ body {
 
 .brand {
   display: flex;
-  gap: 10px;
+  gap: var(--space-2);
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .brand-logo {
@@ -101,15 +129,15 @@ body {
 .status-chip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-family: "JetBrains Mono", monospace;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--muted);
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--subtle);
-  padding: 6px 10px;
-  margin-bottom: 18px;
+  padding: var(--space-1) var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .status-dot {
@@ -138,20 +166,24 @@ body {
 
 .menu {
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .menu-link {
   color: var(--muted);
   text-decoration: none;
   border: 1px solid transparent;
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: var(--radius-sm);
+  padding: 12px;
   display: flex;
-  gap: 10px;
+  gap: var(--space-2);
   align-items: center;
   font-size: 14px;
   font-weight: 500;
+  transition:
+    color var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard),
+    background-color var(--duration-fast) var(--easing-standard);
 }
 
 .menu-link:hover {
@@ -167,7 +199,7 @@ body {
 }
 
 .content {
-  padding: 28px 24px 34px;
+  padding: var(--space-5) var(--space-4);
 }
 
 .app-content {
@@ -176,13 +208,13 @@ body {
 
 .topbar {
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 12px;
-  margin-bottom: 14px;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-2);
   background: var(--bg);
   box-shadow: var(--shadow);
 }
@@ -191,11 +223,11 @@ body {
   flex: 1;
   max-width: 520px;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   background: var(--subtle);
 }
 
@@ -284,10 +316,14 @@ body {
 
 .panel {
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
   background: var(--bg);
   box-shadow: var(--shadow);
+  transition:
+    border-color var(--duration-fast) var(--easing-standard),
+    box-shadow var(--duration-fast) var(--easing-standard),
+    background-color var(--duration-fast) var(--easing-standard);
 }
 
 .panel h3 {
@@ -374,14 +410,18 @@ body {
 .vault-category-btn {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--bg);
   color: var(--fg);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 9px 10px;
+  padding: var(--space-2) 10px;
   cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--easing-standard),
+    background-color var(--duration-fast) var(--easing-standard),
+    color var(--duration-fast) var(--easing-standard);
 }
 
 .vault-category-btn.active {
@@ -419,13 +459,21 @@ body {
 
 .entry-row-card {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--bg);
-  padding: 9px;
+  padding: var(--space-2);
   display: grid;
-  gap: 7px;
+  gap: var(--space-1);
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--easing-standard),
+    background-color var(--duration-fast) var(--easing-standard),
+    transform var(--duration-fast) var(--easing-standard);
+}
+
+.entry-row-card:hover {
+  transform: translateY(-1px);
 }
 
 .entry-row-card.selected {
@@ -490,7 +538,11 @@ body {
   font-size: 11px;
   color: var(--muted);
   background: var(--subtle);
-  padding: 2px 7px;
+  padding: 2px var(--space-1);
+  transition:
+    border-color var(--duration-fast) var(--easing-standard),
+    color var(--duration-fast) var(--easing-standard),
+    background-color var(--duration-fast) var(--easing-standard);
 }
 
 .strength-pill {
@@ -594,13 +646,17 @@ label {
 input,
 textarea,
 select {
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--fg);
-  padding: 10px 12px;
+  padding: var(--space-2) 12px;
   font-size: 14px;
-  font-family: "Inter", sans-serif;
+  font-family: var(--font-sans);
+  transition:
+    border-color var(--duration-fast) var(--easing-standard),
+    background-color var(--duration-fast) var(--easing-standard),
+    color var(--duration-fast) var(--easing-standard);
 }
 
 textarea {
@@ -618,14 +674,20 @@ select:focus {
 .danger-btn,
 .icon-btn {
   border: 1px solid transparent;
-  border-radius: 10px;
-  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) 12px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-1);
   font-weight: 600;
-  transition: all 0.2s;
+  font-family: var(--font-sans);
+  transition:
+    transform var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard),
+    color var(--duration-fast) var(--easing-standard),
+    background-color var(--duration-fast) var(--easing-standard),
+    box-shadow var(--duration-fast) var(--easing-standard);
 }
 
 .primary-btn {
@@ -634,7 +696,8 @@ select:focus {
 }
 
 .primary-btn:hover {
-  opacity: 0.9;
+  opacity: 0.95;
+  transform: translateY(-1px);
 }
 
 .danger-btn {
@@ -647,7 +710,7 @@ select:focus {
   background: var(--subtle);
   color: var(--muted);
   border-color: var(--border);
-  padding: 7px 9px;
+  padding: 6px 10px;
 }
 
 .icon-btn:hover {
@@ -770,9 +833,9 @@ select:focus {
 code {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-family: "JetBrains Mono", monospace;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) 10px;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--muted);
   display: inline-block;
@@ -1056,10 +1119,13 @@ code {
 .spotlight-panel {
   width: min(780px, 100%);
   border: 1px solid color-mix(in srgb, var(--fg) 20%, var(--border));
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: var(--bg);
-  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.2);
   overflow: hidden;
+  transition:
+    transform var(--duration-fast) var(--easing-standard),
+    box-shadow var(--duration-fast) var(--easing-standard);
 }
 
 .spotlight-head {
@@ -1098,8 +1164,12 @@ code {
   background: var(--subtle);
   color: var(--muted);
   font-size: 12px;
-  padding: 6px 10px;
+  padding: var(--space-1) 10px;
   cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--easing-standard),
+    color var(--duration-fast) var(--easing-standard),
+    background-color var(--duration-fast) var(--easing-standard);
 }
 
 .spotlight-chip.active {
@@ -1129,7 +1199,7 @@ code {
 .spotlight-result-btn {
   width: 100%;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--fg);
   display: flex;
@@ -1139,6 +1209,10 @@ code {
   text-align: left;
   padding: 10px;
   cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--easing-standard),
+    background-color var(--duration-fast) var(--easing-standard),
+    transform var(--duration-fast) var(--easing-standard);
 }
 
 .spotlight-result-btn:hover,
