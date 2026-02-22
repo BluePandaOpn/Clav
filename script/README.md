@@ -19,6 +19,14 @@ Carpeta de automatizacion con pipelines multiplataforma.
 - Unix/macOS/Linux: `./start.sh [setup|dev|all]`
   - Ejecuta la pipeline `.sh`.
 
+## Deploy Python seguro (opcional)
+
+Para despliegue local HTTPS con auto-actualizacion y releases:
+
+- Script: `python/deploy_secure.py`
+- Bootstrap de entorno: `python/bootstrap_venv.py`
+- Uso rapido (Windows): `python\run-secure-deploy.bat` (usa `python/.venv`)
+
 ## Perfiles
 
 - `setup`: install + quality + build + doctor.

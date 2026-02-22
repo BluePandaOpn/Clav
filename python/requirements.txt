@@ -1,0 +1,3 @@
+# Dependencias del sistema de deploy Python.
+# Actualmente se usa standard library, este archivo se mantiene
+# para instalaciones reproducibles dentro de .venv.

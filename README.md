@@ -34,6 +34,7 @@ Gestor de passwords profesional con:
 - Emergency Access (5.2): acceso de emergencia al vault si el owner no responde en X dias
 - Modo offline completo (5.3): operaciones locales sin internet + sincronizacion automatica al reconectar
 - Desbloqueo por QR mejorado (5.4): token de un solo uso, expiracion dinamica, firma digital y push notifications
+- Deploy seguro con Python (6.0): build, releases versionadas, HTTPS local, proxy API y auto-actualizacion
 
 ## Requisitos
 
@@ -57,12 +58,17 @@ Variables clave:
 - `MASTER_ENCRYPTION_KEY`: clave maestra de backend (min 64 chars).
 - `ENCRYPTION_LAYERS`: entre 3 y 10.
 - `VITE_API_BASE`: debe coincidir con `API_NAMESPACE`.
+- `VITE_API_PROXY_TARGET`: proxy de Vite hacia API (`http://...` o `https://...`).
 - `APP_BASE_URL`: URL publica frontend para enlaces QR.
 - `HIBP_ENABLED`: habilita chequeo con HaveIBeenPwned Passwords API.
 - `HIBP_TIMEOUT_MS`: timeout de consulta HIBP en ms.
 - `LEAKED_PASSWORDS_FILE`: archivo local de passwords filtradas.
 - `BREACH_AUTO_SCAN_ON_LIST`: refresca brechas automaticamente al consultar credenciales.
 - `BREACH_STATUS_TTL_HOURS`: antiguedad maxima del estado de brecha antes de revalidar.
+- `HTTPS_ENABLED`: habilita servidor API sobre TLS.
+- `HTTPS_KEY_PATH` y `HTTPS_CERT_PATH`: rutas del certificado TLS.
+- `FORCE_HTTPS`: redirige HTTP a HTTPS (util detras de proxy/LB).
+- `HTTP_REDIRECT_ENABLED` y `HTTP_REDIRECT_PORT`: servidor HTTP dedicado que redirige a HTTPS.
 
 ## Desarrollo
 
@@ -73,6 +79,23 @@ npm run dev
 Servicios:
 - Frontend: `http://localhost:5173`
 - API base: `http://localhost:4000/api/v1/<API_NAMESPACE>`
+
+### Migracion HTTP -> HTTPS
+
+1. Genera/instala certificado y clave TLS.
+2. Configura en `.env`:
+   - `HTTPS_ENABLED=true`
+   - `HTTPS_KEY_PATH=<ruta-key.pem>`
+   - `HTTPS_CERT_PATH=<ruta-cert.pem>`
+   - opcional `HTTPS_CA_PATH=<ruta-ca.pem>`
+3. (Opcional recomendado) activa redireccion:
+   - `HTTP_REDIRECT_ENABLED=true`
+   - `HTTP_REDIRECT_PORT=4080`
+4. Si usas Vite en local con API HTTPS:
+   - `VITE_API_PROXY_TARGET=https://localhost:4000`
+5. Si usas reverse proxy (Nginx/Cloudflare/ALB), activa:
+   - `TRUST_PROXY=true`
+   - `FORCE_HTTPS=true`
 
 ## Build
 
@@ -92,6 +115,22 @@ npm run preview:full
 ```bash
 npm run lint
 npm run format:check
+```
+
+## Deploy seguro con Python
+
+Directorio: `python/`
+
+- Script principal: `python/deploy_secure.py`
+- Bootstrap venv: `python/bootstrap_venv.py`
+- Dependencias venv: `python/requirements.txt`
+- Documentacion: `python/README.md`
+- Launcher Windows: `python/run-secure-deploy.bat`
+
+Ejemplo recomendado:
+
+```bash
+python\run-secure-deploy.bat
 ```
 
 ## Extension de navegador (2.1)

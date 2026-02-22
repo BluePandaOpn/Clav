@@ -54,6 +54,23 @@ const backupRunOnStartup = String(process.env.BACKUP_RUN_ON_STARTUP || "false").
 const backupCloudProvider = String(process.env.BACKUP_CLOUD_PROVIDER || "none").toLowerCase();
 const backupCloudUrl = process.env.BACKUP_CLOUD_URL || "";
 const backupCloudAuthHeader = process.env.BACKUP_CLOUD_AUTH_HEADER || "";
+const httpsEnabled = String(process.env.HTTPS_ENABLED || "false").toLowerCase() === "true";
+const httpsKeyPath = process.env.HTTPS_KEY_PATH || "";
+const httpsCertPath = process.env.HTTPS_CERT_PATH || "";
+const httpsCaPath = process.env.HTTPS_CA_PATH || "";
+const trustProxy = String(process.env.TRUST_PROXY || "false").toLowerCase() === "true";
+const forceHttps = String(process.env.FORCE_HTTPS || "false").toLowerCase() === "true";
+const httpsPublicOrigin = process.env.HTTPS_PUBLIC_ORIGIN || "";
+const httpRedirectEnabled = String(process.env.HTTP_REDIRECT_ENABLED || "false").toLowerCase() === "true";
+const httpRedirectPort = Number(process.env.HTTP_REDIRECT_PORT || 4080);
+
+if (httpsEnabled && (!httpsKeyPath || !httpsCertPath)) {
+  throw new Error("HTTPS_ENABLED=true requires HTTPS_KEY_PATH and HTTPS_CERT_PATH.");
+}
+
+if (httpRedirectEnabled && (!Number.isInteger(httpRedirectPort) || httpRedirectPort <= 0)) {
+  throw new Error("HTTP_REDIRECT_PORT must be a positive integer when HTTP_REDIRECT_ENABLED=true.");
+}
 
 export const config = {
   apiNamespace,
@@ -77,5 +94,14 @@ export const config = {
   backupRunOnStartup,
   backupCloudProvider,
   backupCloudUrl,
-  backupCloudAuthHeader
+  backupCloudAuthHeader,
+  httpsEnabled,
+  httpsKeyPath,
+  httpsCertPath,
+  httpsCaPath,
+  trustProxy,
+  forceHttps,
+  httpsPublicOrigin,
+  httpRedirectEnabled,
+  httpRedirectPort
 };

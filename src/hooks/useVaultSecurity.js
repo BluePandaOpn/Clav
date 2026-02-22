@@ -202,6 +202,21 @@ export function useVaultSecurity() {
     setReady(false);
   }, []);
 
+  const purgeBrowserVaultData = useCallback(() => {
+    lock();
+    try {
+      localStorage.clear();
+    } catch {
+      // Ignore storage cleanup failures.
+    }
+    try {
+      sessionStorage.clear();
+    } catch {
+      // Ignore storage cleanup failures.
+    }
+    setConfigured(false);
+  }, [lock]);
+
   const saveEncryptedVault = useCallback(
     async (items) => {
       if (!cryptoKey) return;
@@ -525,6 +540,7 @@ export function useVaultSecurity() {
     setupMasterPassword,
     unlock,
     lock,
+    purgeBrowserVaultData,
     saveEncryptedVault,
     loadEncryptedVault,
     ensureDeviceKeyPair,

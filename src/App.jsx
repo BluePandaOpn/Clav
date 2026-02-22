@@ -19,6 +19,7 @@ import { useToasts } from "./hooks/useToasts.js";
 import { useVaultSecurity } from "./hooks/useVaultSecurity.js";
 
 export default function App() {
+  const MASTER_SESSION_CHECK_MS = 10 * 60 * 1000;
   const location = useLocation();
   const navigate = useNavigate();
   const pathname = location.pathname.replace(/\/+$/, "") || "/";
@@ -124,6 +125,40 @@ export default function App() {
       pushToast(`Boveda bloqueada automaticamente por ${reasonLabel}`, "info");
     }
   });
+
+  useEffect(() => {
+    if (!security.isUnlocked) return undefined;
+
+    let timerId = null;
+
+    const scheduleNextCheck = () => {
+      timerId = window.setTimeout(() => {
+        if (document.visibilityState === "visible") {
+          scheduleNextCheck();
+          return;
+        }
+        security.purgeBrowserVaultData();
+      }, MASTER_SESSION_CHECK_MS);
+    };
+
+    const onPageHide = () => {
+      security.purgeBrowserVaultData();
+    };
+
+    const onBeforeUnload = () => {
+      security.purgeBrowserVaultData();
+    };
+
+    scheduleNextCheck();
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("beforeunload", onBeforeUnload);
+
+    return () => {
+      if (timerId) window.clearTimeout(timerId);
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [security.isUnlocked, security.purgeBrowserVaultData, MASTER_SESSION_CHECK_MS]);
 
   const activateTravelMode = (minutes = travelModeDurationMinutes) => {
     const safeMinutes = Math.max(1, Math.min(24 * 60, Number(minutes) || 60));

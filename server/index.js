@@ -2,6 +2,9 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import fs from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import { config } from "./config.js";
 import {
   addAuditLog,
@@ -60,6 +63,7 @@ const asyncHandler =
     Promise.resolve(fn(req, res, next)).catch(next);
 
 app.disable("x-powered-by");
+app.set("trust proxy", config.trustProxy ? 1 : 0);
 app.use(
   cors({
     origin: config.corsOrigin
@@ -71,6 +75,18 @@ app.use(
   })
 );
 app.use(express.json({ limit: "24kb" }));
+
+if (config.forceHttps) {
+  app.use((req, res, next) => {
+    if (req.secure || String(req.headers["x-forwarded-proto"] || "").toLowerCase() === "https") {
+      next();
+      return;
+    }
+
+    const destination = getHttpsRedirectUrl(req);
+    res.redirect(308, destination);
+  });
+}
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -774,17 +790,17 @@ app.use((error, _req, res) => {
   res.status(status).json({ error: status === 500 ? "internal error" : error.message });
 });
 
-const server = app.listen(config.port, () => {
-  console.log(`API running on http://localhost:${config.port}${config.apiBasePath}`);
-});
-syncHub.attachWebSocketServer(server, `${config.apiBasePath}/sync/ws`);
+const primaryServer = createPrimaryServer();
+const redirectServer = createHttpRedirectServer();
+
+syncHub.attachWebSocketServer(primaryServer, `${config.apiBasePath}/sync/ws`);
 backupService.start().catch(() => {
   // Non-fatal scheduler startup failure.
 });
 startRotationScheduler();
 startEmergencyScheduler();
 
-server.on("error", (error) => {
+primaryServer.on("error", (error) => {
   if (error?.code === "EADDRINUSE") {
     console.error(`Port ${config.port} is already in use. Stop the existing process or change PORT.`);
     process.exit(1);
@@ -792,12 +808,85 @@ server.on("error", (error) => {
   throw error;
 });
 
+if (redirectServer) {
+  redirectServer.on("error", (error) => {
+    if (error?.code === "EADDRINUSE") {
+      console.error(
+        `HTTP redirect port ${config.httpRedirectPort} is already in use. Stop the existing process or change HTTP_REDIRECT_PORT.`
+      );
+      process.exit(1);
+    }
+    throw error;
+  });
+}
+
 function getIp(req) {
   return String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "n/a");
 }
 
 function getUa(req) {
   return String(req.headers["user-agent"] || "n/a");
+}
+
+function createPrimaryServer() {
+  if (!config.httpsEnabled) {
+    const server = app.listen(config.port, () => {
+      console.log(`API running on http://localhost:${config.port}${config.apiBasePath}`);
+    });
+    return server;
+  }
+
+  const options = {
+    key: fs.readFileSync(config.httpsKeyPath),
+    cert: fs.readFileSync(config.httpsCertPath)
+  };
+  if (config.httpsCaPath) {
+    options.ca = fs.readFileSync(config.httpsCaPath);
+  }
+
+  const server = https.createServer(options, app).listen(config.port, () => {
+    console.log(`API running on https://localhost:${config.port}${config.apiBasePath}`);
+  });
+  return server;
+}
+
+function createHttpRedirectServer() {
+  if (!config.httpRedirectEnabled) return null;
+  if (!config.httpsEnabled) {
+    console.warn("[security] HTTP_REDIRECT_ENABLED=true ignored because HTTPS_ENABLED=false.");
+    return null;
+  }
+  if (config.httpRedirectPort === config.port) {
+    throw new Error("HTTP_REDIRECT_PORT cannot be the same as PORT when HTTPS_ENABLED=true.");
+  }
+
+  const server = http
+    .createServer((req, res) => {
+      const origin = config.httpsPublicOrigin || `https://localhost:${config.port}`;
+      const path = req.url || "/";
+      const location = `${origin}${path}`;
+      res.statusCode = 308;
+      res.setHeader("Location", location);
+      res.end("Redirecting to HTTPS");
+    })
+    .listen(config.httpRedirectPort, () => {
+      const origin = config.httpsPublicOrigin || `https://localhost:${config.port}`;
+      console.log(`HTTP redirect running on http://localhost:${config.httpRedirectPort} -> ${origin}`);
+    });
+
+  return server;
+}
+
+function getHttpsRedirectUrl(req) {
+  const path = req.originalUrl || req.url || "/";
+  if (config.httpsPublicOrigin) {
+    return `${config.httpsPublicOrigin}${path}`;
+  }
+
+  const host = String(req.headers.host || "localhost");
+  const hostWithoutPort = host.replace(/:\d+$/, "");
+  const targetPort = config.port === 443 ? "" : `:${config.port}`;
+  return `https://${hostWithoutPort}${targetPort}${path}`;
 }
 
 function startRotationScheduler() {
