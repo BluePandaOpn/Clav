@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import AppShell from "./components/AppShell.jsx";
 import MasterPasswordGate from "./components/MasterPasswordGate.jsx";
 import ToastStack from "./components/ToastStack.jsx";
+import SpotlightSearch from "./components/SpotlightSearch.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import VaultPage from "./pages/VaultPage.jsx";
 import GeneratorPage from "./pages/GeneratorPage.jsx";
@@ -19,6 +20,7 @@ import { useVaultSecurity } from "./hooks/useVaultSecurity.js";
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
   const pathname = location.pathname.replace(/\/+$/, "") || "/";
   const security = useVaultSecurity();
   const {
@@ -59,6 +61,7 @@ export default function App() {
     "vault_presentation_mode_enabled_v023",
     false
   );
+  const [spotlightOpen, setSpotlightOpen] = useState(false);
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -146,6 +149,62 @@ export default function App() {
     pushToast("Modo presentacion desactivado", "info");
   };
 
+  useEffect(() => {
+    const isTypingContext = (target) => {
+      if (!target || typeof target.closest !== "function") return false;
+      return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+    };
+
+    const onKeyDown = (event) => {
+      const shortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k";
+      if (!shortcut) return;
+      if (!security.isUnlocked) return;
+      if (isTypingContext(event.target)) return;
+      event.preventDefault();
+      setSpotlightOpen((prev) => !prev);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [security.isUnlocked]);
+
+  const dispatchVaultSpotlightAction = (detail) => {
+    window.requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent("vault:spotlight-action", { detail }));
+    });
+  };
+
+  const openSpotlightCreate = () => {
+    localStorage.setItem("vault_search", JSON.stringify(""));
+    localStorage.setItem("vault_category_v062", JSON.stringify("ALL"));
+    navigate("/vault");
+    setSpotlightOpen(false);
+    dispatchVaultSpotlightAction({ action: "create" });
+  };
+
+  const openSpotlightEdit = (item) => {
+    if (!item?.id) return;
+    localStorage.setItem("vault_search", JSON.stringify(""));
+    localStorage.setItem("vault_category_v062", JSON.stringify("ALL"));
+    navigate("/vault");
+    setSpotlightOpen(false);
+    dispatchVaultSpotlightAction({ action: "edit", itemId: item.id });
+  };
+
+  const openSpotlightItem = (item) => {
+    if (!item?.id) return;
+    localStorage.setItem("vault_search", JSON.stringify(""));
+    localStorage.setItem("vault_category_v062", JSON.stringify("ALL"));
+    navigate("/vault");
+    setSpotlightOpen(false);
+    dispatchVaultSpotlightAction({ action: "open", itemId: item.id });
+  };
+
+  const openSpotlightGenerator = () => {
+    navigate("/generator");
+    setSpotlightOpen(false);
+  };
+
   const shared = {
     items,
     loading,
@@ -214,7 +273,11 @@ export default function App() {
   }
 
   return (
-    <AppShell offlineMode={offlineMode} pendingSyncCount={pendingSyncCount}>
+    <AppShell
+      offlineMode={offlineMode}
+      pendingSyncCount={pendingSyncCount}
+      onOpenSpotlight={() => setSpotlightOpen(true)}
+    >
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage stats={stats} {...shared} />} />
@@ -226,6 +289,15 @@ export default function App() {
         <Route path="/account" element={<AccountPage {...shared} />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+      <SpotlightSearch
+        open={spotlightOpen}
+        items={items}
+        onClose={() => setSpotlightOpen(false)}
+        onOpenCreate={openSpotlightCreate}
+        onOpenEdit={openSpotlightEdit}
+        onOpenItem={openSpotlightItem}
+        onOpenGenerate={openSpotlightGenerator}
+      />
       <ToastStack items={toasts} onClose={removeToast} />
     </AppShell>
   );

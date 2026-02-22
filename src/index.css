@@ -654,6 +654,12 @@ select:focus {
   color: var(--fg);
 }
 
+.icon-btn.active {
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--fg) 25%, var(--border));
+  background: color-mix(in srgb, var(--subtle) 75%, var(--bg));
+}
+
 .icon-btn.danger {
   color: var(--danger);
 }
@@ -1036,6 +1042,129 @@ code {
   border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
 }
 
+.spotlight-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: color-mix(in srgb, var(--fg) 18%, transparent);
+  backdrop-filter: blur(5px);
+  display: grid;
+  place-items: start center;
+  padding: 8vh 14px 16px;
+}
+
+.spotlight-panel {
+  width: min(780px, 100%);
+  border: 1px solid color-mix(in srgb, var(--fg) 20%, var(--border));
+  border-radius: 16px;
+  background: var(--bg);
+  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+.spotlight-head {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+}
+
+.spotlight-input-wrap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--subtle);
+}
+
+.spotlight-input-wrap input {
+  border: 0;
+  background: transparent;
+  width: 100%;
+  padding: 12px 0;
+}
+
+.spotlight-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.spotlight-chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--subtle);
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.spotlight-chip.active {
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--fg) 24%, var(--border));
+  background: var(--bg);
+}
+
+.spotlight-actions {
+  padding: 10px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.spotlight-results {
+  list-style: none;
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 48vh;
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+}
+
+.spotlight-result-btn {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fg);
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.spotlight-result-btn:hover,
+.spotlight-result-btn.active {
+  border-color: color-mix(in srgb, var(--fg) 20%, var(--border));
+  background: var(--subtle);
+}
+
+.spotlight-result-btn strong {
+  display: block;
+  font-size: 14px;
+}
+
+.spotlight-result-btn small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.spotlight-foot {
+  border-top: 1px solid var(--border);
+  padding: 10px 14px 12px;
+  display: flex;
+  justify-content: flex-end;
+  font-size: 12px;
+}
+
 .error-text {
   color: var(--danger);
   margin: 4px 0 0;
@@ -1091,6 +1220,15 @@ button:disabled {
 
   .topbar-search {
     max-width: none;
+  }
+
+  .spotlight-overlay {
+    padding-top: 4vh;
+  }
+
+  .spotlight-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .vault-grid,

@@ -23,7 +23,7 @@ const links = [
   { to: "/account", label: "Cuenta", icon: UserRound }
 ];
 
-export default function AppShell({ children, offlineMode = false, pendingSyncCount = 0 }) {
+export default function AppShell({ children, offlineMode = false, pendingSyncCount = 0, onOpenSpotlight }) {
   const appName = import.meta.env.VITE_APP_NAME || "Password Manager";
   const navigate = useNavigate();
 
@@ -31,7 +31,7 @@ export default function AppShell({ children, offlineMode = false, pendingSyncCou
     event.preventDefault();
     const input = event.currentTarget.elements.global_search;
     const value = String(input?.value || "").trim();
-    localStorage.setItem("vault_search", value);
+    localStorage.setItem("vault_search", JSON.stringify(value));
     navigate("/vault");
   };
 
@@ -78,6 +78,9 @@ export default function AppShell({ children, offlineMode = false, pendingSyncCou
             <input name="global_search" placeholder="Buscar en el vault..." />
           </form>
           <div className="topbar-actions">
+            <button className="icon-btn" type="button" onClick={() => onOpenSpotlight?.()}>
+              <Command size={14} /> Ctrl/Cmd + K
+            </button>
             <button className="primary-btn" type="button" onClick={goToAdd}>
               <Plus size={14} /> Anadir
             </button>

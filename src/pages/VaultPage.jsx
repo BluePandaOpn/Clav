@@ -59,6 +59,7 @@ export default function VaultPage({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState(initialForm);
+  const [pendingSpotlightEditId, setPendingSpotlightEditId] = useState("");
 
   useEffect(() => {
     const loadSharedData = async () => {
@@ -78,6 +79,32 @@ export default function VaultPage({
     };
     loadSharedData();
   }, []);
+
+  useEffect(() => {
+    const handleSpotlightAction = (event) => {
+      const action = event?.detail?.action;
+      const itemId = event?.detail?.itemId;
+
+      if (action === "create") {
+        setActiveCategory("ALL");
+        setSearch("");
+        setShowAddForm(true);
+        setEditing(false);
+        return;
+      }
+
+      if ((action === "open" || action === "edit") && itemId) {
+        setActiveCategory("ALL");
+        setSearch("");
+        setShowAddForm(false);
+        setSelectedId(itemId);
+        if (action === "edit") setPendingSpotlightEditId(itemId);
+      }
+    };
+
+    window.addEventListener("vault:spotlight-action", handleSpotlightAction);
+    return () => window.removeEventListener("vault:spotlight-action", handleSpotlightAction);
+  }, [setActiveCategory, setSearch]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -130,6 +157,13 @@ export default function VaultPage({
       isSensitive: Boolean(selectedItem.isSensitive)
     });
   }, [selectedItem?.id]);
+
+  useEffect(() => {
+    if (!pendingSpotlightEditId) return;
+    if (!selectedItem || selectedItem.id !== pendingSpotlightEditId) return;
+    setEditing(true);
+    setPendingSpotlightEditId("");
+  }, [pendingSpotlightEditId, selectedItem]);
 
   const addNewEntry = async (event) => {
     event.preventDefault();
