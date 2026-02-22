@@ -120,6 +120,14 @@ Fecha: 2026-02-22
   - `GET /backup/local`
   - `POST /backup/run`
 
+## 4.1 - Generador de contrasenas inteligente
+
+- En `Generator` se agrega deteccion heuristica de:
+  - Requisitos del sitio (URL/dominio y texto de politica).
+  - Longitud minima.
+  - Caracteres permitidos (minusculas, mayusculas, numeros, simbolos).
+- Al generar, aplica automaticamente la politica detectada si el modo inteligente esta activo.
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

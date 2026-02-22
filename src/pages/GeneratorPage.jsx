@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { Copy, RefreshCw, WandSparkles } from "lucide-react";
 import PasswordStrength from "../components/PasswordStrength.jsx";
 import { api } from "../utils/api.js";
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
+import { detectPasswordRequirements } from "../utils/password.js";
 
 export default function GeneratorPage({ setGeneratedPassword, pushToast, presentationModeEnabled }) {
   const [password, setPassword] = useLocalStorage("generator_last_password", "");
@@ -13,12 +14,33 @@ export default function GeneratorPage({ setGeneratedPassword, pushToast, present
     numbers: true,
     symbols: true
   });
+  const [siteUrl, setSiteUrl] = useLocalStorage("generator_site_url_v041", "");
+  const [policyText, setPolicyText] = useLocalStorage("generator_policy_text_v041", "");
+  const [smartMode, setSmartMode] = useState(true);
+
+  const detected = useMemo(
+    () =>
+      detectPasswordRequirements({
+        siteUrl,
+        policyText,
+        fallbackLength: options.length
+      }),
+    [siteUrl, policyText, options.length]
+  );
 
   const updateOption = (name, value) => setOptions((prev) => ({ ...prev, [name]: value }));
 
   const generate = async () => {
     try {
-      const data = await api.generatePassword(options);
+      const effective = smartMode
+        ? {
+            ...options,
+            length: Math.max(options.length, detected.minLength),
+            ...detected.allowed
+          }
+        : options;
+
+      const data = await api.generatePassword(effective);
       setPassword(data.password);
       setGeneratedPassword(data.password);
       pushToast("Password aleatorio generado", "success");
@@ -62,6 +84,34 @@ export default function GeneratorPage({ setGeneratedPassword, pushToast, present
         </div>
 
         <PasswordStrength value={password} />
+
+        <article className="panel">
+          <h3>4.1 Generador inteligente</h3>
+          <label>
+            Sitio (URL o dominio)
+            <input
+              value={siteUrl}
+              onChange={(e) => setSiteUrl(e.target.value)}
+              placeholder="ej: login.empresa.com"
+            />
+          </label>
+          <label>
+            Requisitos del sitio (texto)
+            <textarea
+              rows={3}
+              value={policyText}
+              onChange={(e) => setPolicyText(e.target.value)}
+              placeholder="Ej: minimo 12 caracteres, alfanumerico, al menos una mayuscula y un numero"
+            />
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={smartMode} onChange={(e) => setSmartMode(e.target.checked)} />
+            Aplicar deteccion automatica
+          </label>
+          <small className="muted">
+            Detectado: min {detected.minLength} | permitidos: {detected.allowedSummary || "sin datos"}
+          </small>
+        </article>
 
         <div className="options-grid">
           <label>

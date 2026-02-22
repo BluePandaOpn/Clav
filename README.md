@@ -26,6 +26,7 @@ Gestor de passwords profesional con:
 - Sharding del vault (3.2): separacion fisica en metadatos, cifrado y entradas
 - Sincronizacion entre dispositivos (3.3): SSE + WebSockets + CRDT LWW
 - Backups automaticos cifrados (3.4): locales, nube y exportacion programada
+- Generador de contrasenas inteligente (4.1): deteccion de requisitos de sitio y politica
 
 ## Requisitos
 
