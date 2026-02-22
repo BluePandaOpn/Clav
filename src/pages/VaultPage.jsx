@@ -351,11 +351,18 @@ export default function VaultPage({
                 const strengthTone = strength.toLowerCase();
                 const isFavorite = new Set(favoriteIds).has(item.id);
                 return (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
                     className={`entry-row-card ${selectedId === item.id ? "selected" : ""}`}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedId(item.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedId(item.id);
+                      }
+                    }}
                   >
                     <div className="entry-row-main">
                       <div className="entry-icon">
@@ -386,7 +393,7 @@ export default function VaultPage({
                         </Tag>
                       ))}
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
