@@ -29,6 +29,7 @@ Gestor de passwords profesional con:
 - Generador de contrasenas inteligente (4.1): deteccion de requisitos de sitio y politica
 - Clasificacion automatica (4.2): login, tarjeta de credito, nota segura y API key
 - Auto-rotacion de credenciales (4.3): GitHub tokens, API keys y SSH keys con politica por entrada
+- Deteccion de patrones debiles (4.4): contrasenas parecidas, reutilizacion y secuencias comunes
 
 ## Requisitos
 

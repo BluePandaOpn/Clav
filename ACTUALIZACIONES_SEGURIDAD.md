@@ -158,6 +158,17 @@ Fecha: 2026-02-22
   - `GET /rotation/due`
   - `POST /rotation/run-due`
 
+## 4.4 - Deteccion de patrones debiles
+
+- Analisis automatico de passwords para identificar:
+  - Contrasenas parecidas (similitud alta entre pares).
+  - Reutilizacion exacta (misma password en multiples entradas).
+  - Secuencias debiles (ej. `1234`, `abcd`, `qwerty`, repeticion de caracteres).
+- Integrado en `Dashboard` dentro de la auditoria visual:
+  - Metrica agregada de "Patrones debiles".
+  - Listado de credenciales afectadas con motivo detectado.
+  - Top de pares de credenciales con alta similitud.
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

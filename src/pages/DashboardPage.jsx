@@ -1,6 +1,7 @@
 import React from "react";
 import { AlertTriangle, KeyRound, Shield, Sparkles } from "lucide-react";
 import { getStrengthScore } from "../utils/password.js";
+import { analyzeWeakPatterns } from "../utils/weakPatterns.js";
 
 function Stat({ icon: Icon, label, value }) {
   return (
@@ -25,7 +26,8 @@ export default function DashboardPage({ items, stats, presentationModeEnabled })
     const ageDays = (Date.now() - ts) / (1000 * 60 * 60 * 24);
     return ageDays >= 180;
   });
-  const duplicateGroups = buildDuplicateGroups(nonHoneyItems);
+  const weakPatternReport = analyzeWeakPatterns(nonHoneyItems);
+  const duplicateGroups = weakPatternReport.duplicateGroups;
   const duplicatedCount = duplicateGroups.reduce((acc, group) => acc + group.items.length, 0);
   const auditBars = [
     {
@@ -48,6 +50,13 @@ export default function DashboardPage({ items, stats, presentationModeEnabled })
       value: oldItems.length,
       total: nonHoneyItems.length,
       tone: "medium"
+    },
+    {
+      key: "patterns",
+      label: "Patrones debiles",
+      value: weakPatternReport.affectedCount,
+      total: nonHoneyItems.length,
+      tone: "warning"
     }
   ];
 
@@ -136,22 +145,47 @@ export default function DashboardPage({ items, stats, presentationModeEnabled })
               ))}
             </ul>
           </article>
+
+          <article className="panel">
+            <h4>4.4 Patrones debiles</h4>
+            <p className="muted">
+              Reutilizacion: {weakPatternReport.reusedCount} | Parecidas: {weakPatternReport.similarCount} | Secuencias:{" "}
+              {weakPatternReport.sequenceCount}
+            </p>
+            {weakPatternReport.affectedEntries.length === 0 ? <p className="muted">Sin patrones debiles detectados.</p> : null}
+            <ul className="security-list">
+              {weakPatternReport.affectedEntries.slice(0, 8).map((entry) => (
+                <li key={`weak-pattern-${entry.id}`}>
+                  <strong>{entry.service}</strong>
+                  <small>{entry.reasons.map((reason) => mapReasonLabel(reason)).join(", ")}</small>
+                </li>
+              ))}
+            </ul>
+            {weakPatternReport.similarPairs.length > 0 ? (
+              <>
+                <p className="muted">Top contrasenas parecidas:</p>
+                <ul className="security-list">
+                  {weakPatternReport.similarPairs.slice(0, 5).map((pair, idx) => (
+                    <li key={`weak-similar-${idx}`}>
+                      <strong>
+                        {pair.leftService} ↔ {pair.rightService}
+                      </strong>
+                      <small>Similitud: {Math.round(pair.score * 100)}%</small>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </article>
         </div>
       </section>
     </section>
   );
 }
 
-function buildDuplicateGroups(items) {
-  const byPassword = new Map();
-  for (const item of items) {
-    const key = String(item.password || "");
-    if (!key || key.startsWith("[")) continue;
-    const current = byPassword.get(key) || [];
-    current.push(item);
-    byPassword.set(key, current);
-  }
-  return Array.from(byPassword.values())
-    .filter((group) => group.length > 1)
-    .sort((a, b) => b.length - a.length);
+function mapReasonLabel(reason) {
+  if (reason === "reused") return "reutilizada";
+  if (reason === "similar") return "parecida";
+  if (reason === "sequence") return "secuencia";
+  return reason;
 }
