@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
+import SecurePasswordInput from "./SecurePasswordInput.jsx";
 
 export default function MasterPasswordGate({ isConfigured, onUnlock, onSetup }) {
   const [password, setPassword] = useState("");
@@ -45,26 +46,22 @@ export default function MasterPasswordGate({ isConfigured, onUnlock, onSetup }) 
           </p>
         </div>
         <form onSubmit={submit} className="gate-form">
-          <label>
-            Password maestra
-            <input
-              type="password"
-              autoFocus
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Minimo 8 caracteres"
-            />
-          </label>
+          <SecurePasswordInput
+            label="Password maestra"
+            value={password}
+            onChange={setPassword}
+            autoFocus
+            placeholder="Minimo 8 caracteres"
+            toggleKey="master_virtual_kb_toggle_v012"
+          />
           {!isConfigured ? (
-            <label>
-              Confirmar password
-              <input
-                type="password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="Repite la password"
-              />
-            </label>
+            <SecurePasswordInput
+              label="Confirmar password"
+              value={confirm}
+              onChange={setConfirm}
+              placeholder="Repite la password"
+              toggleKey="master_confirm_virtual_kb_toggle_v012"
+            />
           ) : null}
           {error ? <p className="error-text">{error}</p> : null}
           <button className="primary-btn" type="submit" disabled={loading}>
