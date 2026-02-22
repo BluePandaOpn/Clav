@@ -10,11 +10,13 @@ import {
   createCredentialSharePackage,
   createCredential,
   deleteCredential,
+  generateHoneyCredentials,
   listShareTargets,
   listAuditLogs,
   listCredentials,
   listTrustedDevices,
   readStore,
+  registerHoneyCredentialAccess,
   upsertDeviceEncryptionKey,
   updateCredential
 } from "./store.js";
@@ -241,6 +243,40 @@ api.post(
     });
 
     return res.status(201).json({ package: pkg });
+  })
+);
+
+api.post(
+  "/honey/generate",
+  asyncHandler(async (req, res) => {
+    const count = Number(req.body?.count || 3);
+    const items = await generateHoneyCredentials(count);
+    await addAuditLog({
+      type: "HONEY_PASSWORDS_GENERATED",
+      detail: `count:${items.length}`,
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    return res.status(201).json({ items });
+  })
+);
+
+api.post(
+  "/honey/trigger",
+  asyncHandler(async (req, res) => {
+    const credentialId = String(req.body?.credentialId || "");
+    const action = String(req.body?.action || "access");
+    if (!credentialId) {
+      return res.status(400).json({ error: "credentialId is required" });
+    }
+    const data = await registerHoneyCredentialAccess(credentialId, action, {
+      ip: getIp(req),
+      userAgent: getUa(req)
+    });
+    if (!data) {
+      return res.status(404).json({ error: "honey credential not found" });
+    }
+    return res.status(201).json(data);
   })
 );
 

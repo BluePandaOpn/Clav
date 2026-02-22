@@ -15,6 +15,7 @@ Gestor de passwords profesional con:
 - QR unlock de un solo uso con expiracion corta y firma HMAC
 - Registro automatico de dispositivos confiables + bitacora de seguridad
 - Autenticacion basada en hardware (0.1.3): WebAuthn/Passkeys, YubiKey y NFC unlock experimental local
+- Honey passwords (0.1.4): credenciales senuelo para deteccion de accesos no autorizados
 
 ## Requisitos
 
@@ -90,6 +91,8 @@ Prefix: `/api/v1/<API_NAMESPACE>`
 - `GET /devices/share-targets`
 - `POST /share/credential`
 - `GET /audit`
+- `POST /honey/generate`
+- `POST /honey/trigger`
 
 Endpoint publico de vida:
 - `GET /healthz`

@@ -9,6 +9,15 @@ Fecha: 2026-02-22
 - NFC unlock experimental en cliente (validacion por hash de token local con lectura Web NFC).
 - Integracion en `Settings` para alta, prueba y estado de compatibilidad por navegador/dispositivo.
 
+## 0.1.4 - Honey passwords
+
+- Se agrega generacion de credenciales senuelo en `Vault` con boton dedicado.
+- Las credenciales honey se marcan con badge `Honey`.
+- Al revelar o copiar una credencial honey se dispara evento de seguridad y se registra auditoria.
+- Nuevos endpoints:
+  - `POST /honey/generate`
+  - `POST /honey/trigger`
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

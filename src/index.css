@@ -363,6 +363,10 @@ select:focus {
 
 .filter-row {
   margin-bottom: 12px;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .search-box input {
@@ -412,6 +416,14 @@ select:focus {
   padding: 4px 8px;
   height: fit-content;
   font-size: 12px;
+}
+
+.honey-badge {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .password-row {
@@ -680,5 +692,10 @@ button:disabled {
   .settings-grid,
   .options-grid {
     grid-template-columns: 1fr;
+  }
+
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

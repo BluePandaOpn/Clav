@@ -60,5 +60,27 @@ export function useCredentials(security) {
     saveEncryptedVault?.([]);
   }, [saveEncryptedVault]);
 
-  return { items, loading, error, refresh, addItem, removeItem, clearAll };
+  const generateHoneyPasswords = useCallback(async (count = 3) => {
+    const data = await api.generateHoneyPasswords({ count });
+    setItems((prev) => {
+      const next = [...(data.items || []), ...prev];
+      saveEncryptedVault?.(next);
+      return next;
+    });
+    return data.items || [];
+  }, [saveEncryptedVault]);
+
+  const triggerHoneyAccess = useCallback(async (credentialId, action) => {
+    const data = await api.triggerHoneyAccess({ credentialId, action });
+    if (data?.item) {
+      setItems((prev) => {
+        const next = prev.map((item) => (item.id === data.item.id ? data.item : item));
+        saveEncryptedVault?.(next);
+        return next;
+      });
+    }
+    return data;
+  }, [saveEncryptedVault]);
+
+  return { items, loading, error, refresh, addItem, removeItem, clearAll, generateHoneyPasswords, triggerHoneyAccess };
 }

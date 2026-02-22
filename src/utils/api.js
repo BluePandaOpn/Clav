@@ -73,5 +73,19 @@ export const api = {
   },
   async listAuditLogs(limit = 60) {
     return request(`${API_BASE}/audit?limit=${encodeURIComponent(limit)}`);
+  },
+  async generateHoneyPasswords(payload = { count: 3 }) {
+    return request(`${API_BASE}/honey/generate`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
+  },
+  async triggerHoneyAccess(payload) {
+    return request(`${API_BASE}/honey/trigger`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload)
+    });
   }
 };

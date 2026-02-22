@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import AppShell from "./components/AppShell.jsx";
 import MasterPasswordGate from "./components/MasterPasswordGate.jsx";
@@ -15,7 +15,8 @@ import { useVaultSecurity } from "./hooks/useVaultSecurity.js";
 export default function App() {
   const location = useLocation();
   const security = useVaultSecurity();
-  const { items, loading, error, addItem, removeItem, clearAll, refresh } = useCredentials(security);
+  const { items, loading, error, addItem, removeItem, clearAll, refresh, generateHoneyPasswords, triggerHoneyAccess } =
+    useCredentials(security);
   const { toasts, pushToast, removeToast } = useToasts();
   const [generatedPassword, setGeneratedPassword] = useState("");
 
@@ -37,6 +38,8 @@ export default function App() {
     removeItem,
     clearAll,
     refresh,
+    generateHoneyPasswords,
+    triggerHoneyAccess,
     pushToast,
     generatedPassword,
     setGeneratedPassword,

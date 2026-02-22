@@ -59,6 +59,9 @@ export async function createCredential(payload) {
     passwordEnc: encryptWithLayers(payload.password, id),
     category: payload.category || "General",
     notes: payload.notes || "",
+    isHoney: Boolean(payload.isHoney),
+    honeyTag: payload.honeyTag || "",
+    honeyLastTriggeredAt: null,
     createdAt: now,
     updatedAt: now
   };
@@ -87,6 +90,9 @@ export async function updateCredential(id, payload) {
     username: payload.username ?? existing.username,
     category: payload.category ?? existing.category,
     notes: payload.notes ?? existing.notes,
+    isHoney: typeof payload.isHoney === "boolean" ? payload.isHoney : Boolean(existing.isHoney),
+    honeyTag: payload.honeyTag ?? existing.honeyTag ?? "",
+    honeyLastTriggeredAt: existing.honeyLastTriggeredAt || null,
     passwordEnc,
     updatedAt: new Date().toISOString()
   };
@@ -111,6 +117,81 @@ export async function clearCredentials() {
   const db = await readStore();
   db.credentials = [];
   await writeStore(db);
+}
+
+export async function generateHoneyCredentials(count = 3) {
+  const safeCount = Math.max(1, Math.min(20, Number(count) || 3));
+  const db = await readStore();
+  const now = new Date().toISOString();
+  const templates = [
+    { service: "CorpVPN", username: "ops.admin" },
+    { service: "Payroll-Internal", username: "finance.audit" },
+    { service: "Prod-Database", username: "db.readonly" },
+    { service: "Root-Console", username: "sys.root" },
+    { service: "AWS-Billing", username: "billing.ops" },
+    { service: "CRM-Backoffice", username: "support.agent" }
+  ];
+
+  const created = [];
+  for (let i = 0; i < safeCount; i += 1) {
+    const tpl = templates[i % templates.length];
+    const id = randomUUID();
+    const itemBase = {
+      id,
+      service: tpl.service,
+      username: `${tpl.username}.${Math.floor(Math.random() * 900 + 100)}`,
+      passwordEnc: encryptWithLayers(generateHoneyPassword(), id),
+      category: "Work",
+      notes: "Honey password (monitorizado)",
+      isHoney: true,
+      honeyTag: "v0.1.4",
+      honeyLastTriggeredAt: null,
+      createdAt: now,
+      updatedAt: now
+    };
+    const item = {
+      ...itemBase,
+      signature: signCredentialEntry(itemBase)
+    };
+    db.credentials.unshift(item);
+    created.push(materializeCredential(item));
+  }
+
+  await writeStore(db);
+  return created;
+}
+
+export async function registerHoneyCredentialAccess(credentialId, action, meta = {}) {
+  const db = await readStore();
+  const index = db.credentials.findIndex((item) => item.id === credentialId);
+  if (index === -1) return null;
+
+  const current = db.credentials[index];
+  if (!current.isHoney) return null;
+
+  const updated = {
+    ...current,
+    honeyLastTriggeredAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  db.credentials[index] = {
+    ...updated,
+    signature: signCredentialEntry(updated)
+  };
+
+  const log = {
+    id: randomUUID(),
+    type: "HONEY_PASSWORD_ACCESSED",
+    detail: `${action}:${current.service}:${current.id}`,
+    ip: meta.ip || "n/a",
+    userAgent: meta.userAgent || "n/a",
+    createdAt: new Date().toISOString()
+  };
+  db.auditLogs.unshift(log);
+  db.auditLogs = db.auditLogs.slice(0, 500);
+
+  await writeStore(db);
+  return { log, item: materializeCredential(db.credentials[index]) };
 }
 
 export async function listTrustedDevices() {
@@ -275,10 +356,22 @@ function materializeCredential(item) {
     password,
     category: item.category || "General",
     notes: item.notes || "",
+    isHoney: Boolean(item.isHoney),
+    honeyTag: item.honeyTag || "",
+    honeyLastTriggeredAt: item.honeyLastTriggeredAt || null,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     integrity
   };
+}
+
+function generateHoneyPassword(length = 20) {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
+  let out = "";
+  for (let i = 0; i < length; i += 1) {
+    out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
 }
 
 function normalizeStore(input) {

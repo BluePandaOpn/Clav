@@ -35,6 +35,8 @@ function canonicalizeForSignature(entry) {
     passwordEnc: entry.passwordEnc,
     category: entry.category || "General",
     notes: entry.notes || "",
+    isHoney: Boolean(entry.isHoney),
+    honeyTag: entry.honeyTag || "",
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt
   };

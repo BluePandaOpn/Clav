@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, Search, ShieldAlert } from "lucide-react";
 import PasswordCard from "../components/PasswordCard.jsx";
 import PasswordStrength from "../components/PasswordStrength.jsx";
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
@@ -12,7 +12,17 @@ const initialForm = {
   notes: ""
 };
 
-export default function VaultPage({ items, loading, error, addItem, removeItem, pushToast, generatedPassword }) {
+export default function VaultPage({
+  items,
+  loading,
+  error,
+  addItem,
+  removeItem,
+  pushToast,
+  generatedPassword,
+  generateHoneyPasswords,
+  triggerHoneyAccess
+}) {
   const [form, setForm] = useState(initialForm);
   const [search, setSearch] = useLocalStorage("vault_search", "");
   const [categoryFilter, setCategoryFilter] = useLocalStorage("vault_category_filter", "All");
@@ -50,9 +60,28 @@ export default function VaultPage({ items, loading, error, addItem, removeItem, 
     }
   };
 
-  const onCopy = async (value) => {
-    await navigator.clipboard.writeText(value);
+  const onCopy = async (item) => {
+    await navigator.clipboard.writeText(item.password);
+    if (item.isHoney) {
+      try {
+        await triggerHoneyAccess?.(item.id, "copy");
+      } catch {
+        // No-op to avoid blocking UI.
+      }
+      pushToast("ALERTA: Honey password accedido (copy)", "error");
+      return;
+    }
     pushToast("Password copiado", "success");
+  };
+
+  const onReveal = async (item) => {
+    if (!item.isHoney) return;
+    try {
+      await triggerHoneyAccess?.(item.id, "reveal");
+    } catch {
+      // No-op to avoid blocking UI.
+    }
+    pushToast("ALERTA: Honey password accedido (reveal)", "error");
   };
 
   const onDelete = async (id) => {
@@ -65,6 +94,15 @@ export default function VaultPage({ items, loading, error, addItem, removeItem, 
   };
 
   const setField = (name, value) => setForm((prev) => ({ ...prev, [name]: value }));
+
+  const generateHoneyBatch = async () => {
+    try {
+      const created = await generateHoneyPasswords?.(3);
+      pushToast(`Honey passwords generadas: ${created?.length || 0}`, "info");
+    } catch (e) {
+      pushToast(e.message, "error");
+    }
+  };
 
   return (
     <section>
@@ -131,6 +169,9 @@ export default function VaultPage({ items, loading, error, addItem, removeItem, 
                 ))}
               </select>
             </label>
+            <button className="danger-btn" type="button" onClick={generateHoneyBatch}>
+              <ShieldAlert size={16} /> Generar honey passwords
+            </button>
           </div>
 
           {loading ? <p className="muted">Cargando...</p> : null}
@@ -138,7 +179,7 @@ export default function VaultPage({ items, loading, error, addItem, removeItem, 
           {!loading && filtered.length === 0 ? <p className="muted">No hay resultados.</p> : null}
           <div className="card-list">
             {filtered.map((item) => (
-              <PasswordCard key={item.id} item={item} onDelete={onDelete} onCopy={onCopy} />
+              <PasswordCard key={item.id} item={item} onDelete={onDelete} onCopy={onCopy} onReveal={onReveal} />
             ))}
           </div>
         </section>
