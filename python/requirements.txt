@@ -1,3 +1,4 @@
-# Dependencias del sistema de deploy Python.
-# Actualmente se usa standard library, este archivo se mantiene
-# para instalaciones reproducibles dentro de .venv.
+﻿# Base deps to prepare .venv.
+# Project code is mostly standard library.
+pip>=26.0.1
+setuptools>=82.0.0

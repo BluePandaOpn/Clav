@@ -18,6 +18,7 @@ import datetime as dt
 import hashlib
 import http.client
 import http.server
+import ipaddress
 import json
 import os
 import shutil
@@ -82,10 +83,43 @@ def get_api_namespace() -> str:
 
 
 def run_command(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
+    resolved = resolve_command(cmd)
     info(f"Running: {' '.join(cmd)}")
-    proc = subprocess.run(cmd, cwd=str(ROOT), env=env)
+    try:
+        proc = subprocess.run(resolved, cwd=str(ROOT), env=env)
+    except FileNotFoundError:
+        fail(f"No se encontro el ejecutable: {cmd[0]}. Verifica instalacion y PATH.")
     if proc.returncode != 0:
         fail(f"Command failed ({proc.returncode}): {' '.join(cmd)}")
+
+
+def resolve_command(cmd: list[str]) -> list[str]:
+    if not cmd:
+        return cmd
+    return [resolve_executable(cmd[0]), *cmd[1:]]
+
+
+def resolve_executable(name: str) -> str:
+    if os.name != "nt":
+        return shutil.which(name) or name
+    candidates = [name]
+    if not Path(name).suffix:
+        candidates.extend([f"{name}.exe", f"{name}.cmd", f"{name}.bat"])
+    for candidate in candidates:
+        found = shutil.which(candidate)
+        if found:
+            return found
+    if name.lower() == "openssl":
+        common = [
+            r"C:\Program Files\Git\mingw64\bin\openssl.exe",
+            r"C:\Program Files\Git\usr\bin\openssl.exe",
+            r"C:\Program Files\OpenSSL-Win64\bin\openssl.exe",
+            r"C:\Program Files\OpenSSL-Win32\bin\openssl.exe",
+        ]
+        for path in common:
+            if Path(path).exists():
+                return path
+    return name
 
 
 def ensure_local_https_cert(cert_file: Path, key_file: Path) -> None:
@@ -114,11 +148,53 @@ def ensure_local_https_cert(cert_file: Path, key_file: Path) -> None:
     try:
         run_command(openssl_cmd)
     except SystemExit:
+        if create_local_https_cert_python(cert_file, key_file):
+            info("Certificado local generado con fallback Python (cryptography).")
+            return
         fail(
-            "No se pudo crear certificado local. Instala OpenSSL o coloca manualmente:\n"
+            "No se pudo crear certificado local. Instala OpenSSL o 'pip install cryptography', o coloca manualmente:\n"
             f"- Certificado: {cert_file}\n"
             f"- Clave privada: {key_file}"
         )
+
+
+def create_local_https_cert_python(cert_file: Path, key_file: Path) -> bool:
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.x509.oid import NameOID
+    except Exception:
+        return False
+
+    now = dt.datetime.now(dt.timezone.utc)
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - dt.timedelta(minutes=1))
+        .not_valid_after(now + dt.timedelta(days=825))
+        .add_extension(
+            x509.SubjectAlternativeName(
+                [x509.DNSName("localhost"), x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]
+            ),
+            critical=False,
+        )
+        .sign(private_key=key, algorithm=hashes.SHA256())
+    )
+    key_file.write_bytes(
+        key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    )
+    cert_file.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    return True
 
 
 def sha256_file(path: Path) -> str:
@@ -141,7 +217,8 @@ def build_frontend() -> None:
 
 
 def create_release() -> Path:
-    release_name = dt.datetime.utcnow().strftime("release-%Y%m%d-%H%M%S")
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    release_name = now_utc.strftime("release-%Y%m%d-%H%M%S")
     release_dir = RELEASES_DIR / release_name
     info(f"Creating release {release_name}")
     shutil.copytree(DIST_DIR, release_dir / "dist", dirs_exist_ok=False)
@@ -151,7 +228,7 @@ def create_release() -> Path:
     append_history(
         {
             "release": release_name,
-            "createdAtUtc": dt.datetime.utcnow().isoformat() + "Z",
+            "createdAtUtc": now_utc.isoformat().replace("+00:00", "Z"),
             "files": len(manifest["files"]),
         }
     )
@@ -173,13 +250,16 @@ def create_integrity_manifest(dist_path: Path) -> dict[str, object]:
         )
     return {
         "algorithm": "sha256",
-        "generatedAtUtc": dt.datetime.utcnow().isoformat() + "Z",
+        "generatedAtUtc": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
         "files": files,
     }
 
 
 def set_current_release(name: str) -> None:
-    payload = {"release": name, "updatedAtUtc": dt.datetime.utcnow().isoformat() + "Z"}
+    payload = {
+        "release": name,
+        "updatedAtUtc": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
     CURRENT_RELEASE_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
@@ -327,6 +407,15 @@ def make_handler(api_origin: str | None):
             assert api_origin is not None
             parsed = urllib.parse.urlparse(api_origin)
             conn_cls = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
+            request_path = urllib.parse.urlparse(self.path).path
+            is_sse_request = request_path.endswith("/sync/events")
+
+            def safe_send_error(status: int, message: str) -> None:
+                try:
+                    self.send_error(status, message)
+                except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError) as exc:
+                    info(f"proxy_to_api: client disconnected before error response ({exc})")
+
             body = None
             length = int(self.headers.get("Content-Length", "0"))
             if length > 0:
@@ -341,12 +430,34 @@ def make_handler(api_origin: str | None):
             headers["Host"] = parsed.netloc
             headers["X-Forwarded-Proto"] = "https"
 
-            connection = conn_cls(parsed.hostname, parsed.port, timeout=20)
+            connection_kwargs: dict[str, object] = {"timeout": None if is_sse_request else 20}
+            if (
+                conn_cls is http.client.HTTPSConnection
+                and parsed.hostname
+                and parsed.hostname.lower() in ("localhost", "127.0.0.1", "::1")
+            ):
+                # Allow local self-signed certs used by the secure local deploy.
+                local_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                local_ctx.check_hostname = False
+                local_ctx.verify_mode = ssl.CERT_NONE
+                connection_kwargs["context"] = local_ctx
+            connection = conn_cls(parsed.hostname, parsed.port, **connection_kwargs)
             try:
                 path = self.path
-                connection.request(self.command, path, body=body, headers=headers)
-                response = connection.getresponse()
-                payload = response.read()
+                try:
+                    connection.request(self.command, path, body=body, headers=headers)
+                    response = connection.getresponse()
+                except ssl.SSLError as exc:
+                    info(f"proxy_to_api SSL error: {exc}")
+                    safe_send_error(502, "Bad gateway: SSL upstream error")
+                    return
+                except OSError as exc:
+                    info(f"proxy_to_api upstream connection error: {exc}")
+                    safe_send_error(502, "Bad gateway: upstream connection error")
+                    return
+
+                content_type = (response.getheader("Content-Type") or "").lower()
+                response_is_sse = is_sse_request or "text/event-stream" in content_type
 
                 self.send_response(response.status, response.reason)
                 for key, value in response.getheaders():
@@ -354,10 +465,34 @@ def make_handler(api_origin: str | None):
                     if lower in ("transfer-encoding", "connection", "content-length"):
                         continue
                     self.send_header(key, value)
+                if response_is_sse:
+                    # SSE must be streamed and should not include Content-Length.
+                    self.send_header("Cache-Control", "no-cache")
+                    self.send_header("X-Accel-Buffering", "no")
+                    self.end_headers()
+                    while True:
+                        try:
+                            chunk = response.read(16 * 1024)
+                        except OSError as exc:
+                            info(f"proxy_to_api SSE upstream read closed: {exc}")
+                            break
+                        if not chunk:
+                            break
+                        try:
+                            self.wfile.write(chunk)
+                            self.wfile.flush()
+                        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
+                            break
+                    return
+
+                payload = response.read()
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
                 if payload:
-                    self.wfile.write(payload)
+                    try:
+                        self.wfile.write(payload)
+                    except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
+                        pass
             finally:
                 connection.close()
 
@@ -414,7 +549,11 @@ def start_node_api_https(
     else:
         env["HTTPS_ENABLED"] = "false"
     info("Starting Node API server")
-    return subprocess.Popen(["node", "server/index.js"], cwd=str(ROOT), env=env)
+    cmd = resolve_command(["node", "server/index.js"])
+    try:
+        return subprocess.Popen(cmd, cwd=str(ROOT), env=env)
+    except FileNotFoundError:
+        fail("No se encontro Node.js en PATH (node).")
 
 
 def watch_for_updates(interval_seconds: int, stop_event: threading.Event) -> None:

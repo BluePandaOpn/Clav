@@ -29,18 +29,29 @@ Desde la raiz del proyecto (Windows recomendado):
 python\run-secure-deploy.bat
 ```
 
-El launcher:
+El launcher principal (`python/run-secure-deploy.bat`) delega en `python/script/03-full.bat`.
+
+## Carpeta `python/script`
+
+Perfiles de arranque automatico (BAT, PowerShell y Shell):
+
+- `01-setup.*`: crea/configura `.venv` e instala dependencias.
+- `02-run.*`: prepara entorno y ejecuta deploy seguro sin `watch`.
+- `03-full.*`: prepara entorno y arranca deploy completo con `watch`.
+
+Todos llaman a `python/script/launcher.py`, que:
 
 - Crea `python/.venv` si no existe.
 - Actualiza `pip/setuptools/wheel`.
 - Instala `python/requirements.txt`.
+- Instala dependencias npm.
 - Ejecuta `python/deploy_secure.py` con el Python del `.venv`.
+- Muestra animaciones de progreso (spinner) durante setup.
 
 Si quieres ejecutar manualmente:
 
 ```bash
-python python/bootstrap_venv.py
-python/.venv/Scripts/python.exe python/deploy_secure.py full --with-api --api-https --enable-http-redirect --watch
+python python/script/launcher.py full
 ```
 
 URLs:
