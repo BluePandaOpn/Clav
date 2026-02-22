@@ -9,7 +9,8 @@ const initialForm = {
   username: "",
   password: "",
   category: "General",
-  notes: ""
+  notes: "",
+  isSensitive: false
 };
 
 export default function VaultPage({
@@ -22,7 +23,8 @@ export default function VaultPage({
   generatedPassword,
   generateHoneyPasswords,
   triggerHoneyAccess,
-  checkCredentialBreach
+  checkCredentialBreach,
+  travelModeActive
 }) {
   const [form, setForm] = useState(initialForm);
   const [search, setSearch] = useLocalStorage("vault_search", "");
@@ -66,6 +68,10 @@ export default function VaultPage({
   };
 
   const onCopy = async (item) => {
+    if (travelModeActive && item.isSensitive) {
+      pushToast("Modo viaje: copy bloqueado para credenciales sensibles", "info");
+      return;
+    }
     await navigator.clipboard.writeText(item.password);
     if (item.isHoney) {
       try {
@@ -84,6 +90,10 @@ export default function VaultPage({
   };
 
   const onReveal = async (item) => {
+    if (travelModeActive && item.isSensitive) {
+      pushToast("Modo viaje: reveal bloqueado para credenciales sensibles", "info");
+      return;
+    }
     if (!item.isHoney) return;
     try {
       await triggerHoneyAccess?.(item.id, "reveal");
@@ -167,6 +177,14 @@ export default function VaultPage({
               Notas
               <textarea value={form.notes} onChange={(e) => setField("notes", e.target.value)} rows={3} />
             </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={Boolean(form.isSensitive)}
+                onChange={(e) => setField("isSensitive", e.target.checked)}
+              />
+              Marcar como sensible (modo viaje la ocultara)
+            </label>
             <button className="primary-btn" type="submit">
               <Plus size={16} /> Guardar
             </button>
@@ -202,7 +220,13 @@ export default function VaultPage({
           <div className="card-list">
             {filtered.map((item) => (
               <div key={item.id} className="card-wrap">
-                <PasswordCard item={item} onDelete={onDelete} onCopy={onCopy} onReveal={onReveal} />
+                <PasswordCard
+                  item={item}
+                  onDelete={onDelete}
+                  onCopy={onCopy}
+                  onReveal={onReveal}
+                  travelModeActive={travelModeActive}
+                />
                 <div className="inline-actions">
                   <button className="icon-btn" type="button" onClick={() => checkBreachNow(item)}>
                     Verificar brecha

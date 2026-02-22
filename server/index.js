@@ -73,11 +73,11 @@ api.get(
 api.post(
   "/credentials",
   asyncHandler(async (req, res) => {
-  const { service, username, password, category, notes } = req.body || {};
+  const { service, username, password, category, notes, isSensitive } = req.body || {};
   if (!service || !password) {
     return res.status(400).json({ error: "service and password are required" });
   }
-  const created = await createCredential({ service, username, password, category, notes });
+  const created = await createCredential({ service, username, password, category, notes, isSensitive });
   const item = (await refreshCredentialBreachStatus(created.id)) || created;
   await addAuditLog({
     type: "CREDENTIAL_CREATED",

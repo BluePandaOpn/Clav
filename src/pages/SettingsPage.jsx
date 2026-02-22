@@ -14,7 +14,13 @@ export default function SettingsPage({
   autoLockMinutes,
   setAutoLockMinutes,
   autoLockGraceSeconds,
-  setAutoLockGraceSeconds
+  setAutoLockGraceSeconds,
+  travelModeActive,
+  travelModeDurationMinutes,
+  setTravelModeDurationMinutes,
+  travelModeExpiresAt,
+  activateTravelMode,
+  deactivateTravelMode
 }) {
   const [qr, setQr] = useState(null);
   const [qrImage, setQrImage] = useState("");
@@ -281,6 +287,13 @@ export default function SettingsPage({
     setAutoLockGraceSeconds?.(clamped);
   };
 
+  const onTravelMinutesChange = (value) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    const clamped = Math.max(1, Math.min(24 * 60, parsed));
+    setTravelModeDurationMinutes?.(clamped);
+  };
+
   return (
     <section>
       <header className="page-head">
@@ -388,6 +401,34 @@ export default function SettingsPage({
       </div>
 
       <div className="panel settings-grid security-grid">
+        <article className="action-card">
+          <h3>0.2.2 Modo viaje</h3>
+          <p>Oculta temporalmente credenciales sensibles mientras viajas.</p>
+          <small className="muted">Estado: {travelModeActive ? "ACTIVO" : "inactivo"}</small>
+          {travelModeActive && travelModeExpiresAt ? (
+            <small className="muted">Expira: {new Date(travelModeExpiresAt).toLocaleString("es-ES")}</small>
+          ) : null}
+          <label>
+            Duracion temporal (minutos)
+            <input
+              type="number"
+              min="1"
+              max="1440"
+              step="1"
+              value={travelModeDurationMinutes}
+              onChange={(e) => onTravelMinutesChange(e.target.value)}
+            />
+          </label>
+          <div className="inline-actions">
+            <button className="primary-btn" type="button" onClick={() => activateTravelMode?.(travelModeDurationMinutes)}>
+              Activar modo viaje
+            </button>
+            <button className="icon-btn" type="button" onClick={deactivateTravelMode} disabled={!travelModeActive}>
+              Desactivar
+            </button>
+          </div>
+        </article>
+
         <article className="action-card">
           <h3>0.1.6 Auto-lock inteligente</h3>
           <p>Bloqueo automatico por inactividad, pestana oculta, perdida de foco y salida del mouse.</p>

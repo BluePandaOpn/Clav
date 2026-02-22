@@ -1,18 +1,24 @@
 import React, { useState } from "react";
 import { AlertTriangle, Copy, Eye, EyeOff, Trash2 } from "lucide-react";
 
-export default function PasswordCard({ item, onDelete, onCopy, onReveal }) {
+export default function PasswordCard({ item, onDelete, onCopy, onReveal, travelModeActive = false }) {
   const [show, setShow] = useState(false);
   const created = new Date(item.createdAt).toLocaleDateString("es-ES");
+  const breached = Boolean(item?.breachStatus?.compromised);
+  const travelLocked = Boolean(travelModeActive && item.isSensitive);
+
   const toggleReveal = () => {
+    if (travelLocked) {
+      onReveal?.(item);
+      return;
+    }
+
     const next = !show;
     setShow(next);
     if (next) {
       onReveal?.(item);
     }
   };
-
-  const breached = Boolean(item?.breachStatus?.compromised);
 
   return (
     <article className="card">
@@ -27,14 +33,15 @@ export default function PasswordCard({ item, onDelete, onCopy, onReveal }) {
               <AlertTriangle size={12} /> Honey
             </span>
           ) : null}
+          {item.isSensitive ? <span className="badge sensitive-badge">Sensitive</span> : null}
           {breached ? <span className="badge breach-badge">Breached</span> : null}
           <span className="badge">{item.category}</span>
         </div>
       </div>
 
       <div className="password-row">
-        <code>{show ? item.password : "••••••••••••••••"}</code>
-        <button className="icon-btn" onClick={toggleReveal} type="button">
+        <code>{travelLocked ? "[TRAVEL_MODE_LOCKED]" : show ? item.password : "****************"}</code>
+        <button className="icon-btn" onClick={toggleReveal} type="button" title={travelLocked ? "Modo viaje activo" : ""}>
           {show ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       </div>
@@ -45,6 +52,7 @@ export default function PasswordCard({ item, onDelete, onCopy, onReveal }) {
           Detectada en filtraciones ({item.breachStatus.pwnedCount || 0} coincidencias HIBP).
         </p>
       ) : null}
+      {travelLocked ? <p className="notes muted">Oculta temporalmente por modo viaje.</p> : null}
 
       <div className="card-foot">
         <small>Creado: {created}</small>

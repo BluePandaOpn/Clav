@@ -48,6 +48,16 @@ Fecha: 2026-02-22
 - Autocompletado sobre formulario activo (usuario + password) en la pestana actual.
 - Configuracion de `API base` desde el popup para apuntar al backend local.
 
+## 0.2.2 - Modo viaje
+
+- Se agrega bandera `isSensitive` para credenciales sensibles.
+- El `Vault` permite marcar credenciales nuevas como sensibles.
+- En `Settings` se puede activar temporalmente el modo viaje (1 a 1440 minutos).
+- Mientras el modo viaje esta activo:
+  - No permite revelar credenciales sensibles.
+  - No permite copiar credenciales sensibles.
+  - Se muestra estado de expiracion del modo viaje.
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

@@ -11,7 +11,7 @@ const SIGN_KID = "vault-signing-ed25519-v1";
 const { privateKey, publicKey } = loadOrCreateSigningKeyPair();
 
 export function signCredentialEntry(entry) {
-  const payload = Buffer.from(canonicalizeForSignature(entry), "utf8");
+  const payload = Buffer.from(canonicalizeForSignature(entry, { includeSensitive: true }), "utf8");
   const signature = sign(null, payload, privateKey);
   return {
     alg: SIGN_ALG,
@@ -22,12 +22,16 @@ export function signCredentialEntry(entry) {
 
 export function verifyCredentialEntry(entry) {
   if (!entry?.signature?.sig) return false;
-  const payload = Buffer.from(canonicalizeForSignature(entry), "utf8");
   const signature = Buffer.from(entry.signature.sig, "base64");
-  return verify(null, payload, publicKey, signature);
+  const v2Payload = Buffer.from(canonicalizeForSignature(entry, { includeSensitive: true }), "utf8");
+  if (verify(null, v2Payload, publicKey, signature)) return true;
+
+  const v1Payload = Buffer.from(canonicalizeForSignature(entry, { includeSensitive: false }), "utf8");
+  return verify(null, v1Payload, publicKey, signature);
 }
 
-function canonicalizeForSignature(entry) {
+function canonicalizeForSignature(entry, options = {}) {
+  const includeSensitive = options.includeSensitive !== false;
   const target = {
     id: entry.id,
     service: entry.service,
@@ -40,6 +44,9 @@ function canonicalizeForSignature(entry) {
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt
   };
+  if (includeSensitive) {
+    target.isSensitive = Boolean(entry.isSensitive);
+  }
   return stableStringify(target);
 }
 

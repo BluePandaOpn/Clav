@@ -24,7 +24,16 @@ export default [
       "react-refresh": reactRefresh
     },
     rules: {
+      "no-unused-vars": ["error", { varsIgnorePattern: "^React$" }],
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }]
+    }
+  },
+  {
+    files: ["browser-extension/**/*.js"],
+    languageOptions: {
+      globals: {
+        chrome: "readonly"
+      }
     }
   }
 ];

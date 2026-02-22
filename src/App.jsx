@@ -37,6 +37,13 @@ export default function App() {
   const [autoLockEnabled, setAutoLockEnabled] = useLocalStorage("vault_auto_lock_enabled_v016", true);
   const [autoLockMinutes, setAutoLockMinutes] = useLocalStorage("vault_auto_lock_minutes_v016", 5);
   const [autoLockGraceSeconds, setAutoLockGraceSeconds] = useLocalStorage("vault_auto_lock_grace_secs_v016", 1.5);
+  const [travelModeEnabled, setTravelModeEnabled] = useLocalStorage("vault_travel_mode_enabled_v022", false);
+  const [travelModeDurationMinutes, setTravelModeDurationMinutes] = useLocalStorage(
+    "vault_travel_mode_duration_minutes_v022",
+    60
+  );
+  const [travelModeExpiresAt, setTravelModeExpiresAt] = useLocalStorage("vault_travel_mode_expires_at_v022", null);
+  const travelModeActive = Boolean(travelModeEnabled && travelModeExpiresAt && Date.now() < travelModeExpiresAt);
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -64,6 +71,21 @@ export default function App() {
     }
   }, [items, pushToast]);
 
+  useEffect(() => {
+    if (!travelModeEnabled || !travelModeExpiresAt) return undefined;
+
+    const checkExpiration = () => {
+      if (Date.now() < Number(travelModeExpiresAt)) return;
+      setTravelModeEnabled(false);
+      setTravelModeExpiresAt(null);
+      pushToast("Modo viaje finalizado automaticamente", "info");
+    };
+
+    checkExpiration();
+    const timer = window.setInterval(checkExpiration, 15000);
+    return () => window.clearInterval(timer);
+  }, [travelModeEnabled, travelModeExpiresAt, setTravelModeEnabled, setTravelModeExpiresAt, pushToast]);
+
   useAutoLock({
     enabled: Boolean(autoLockEnabled),
     isUnlocked: security.isUnlocked,
@@ -84,6 +106,20 @@ export default function App() {
       pushToast(`Boveda bloqueada automaticamente por ${reasonLabel}`, "info");
     }
   });
+
+  const activateTravelMode = (minutes = travelModeDurationMinutes) => {
+    const safeMinutes = Math.max(1, Math.min(24 * 60, Number(minutes) || 60));
+    setTravelModeDurationMinutes(safeMinutes);
+    setTravelModeExpiresAt(Date.now() + safeMinutes * 60 * 1000);
+    setTravelModeEnabled(true);
+    pushToast(`Modo viaje activado por ${safeMinutes} minuto(s)`, "info");
+  };
+
+  const deactivateTravelMode = () => {
+    setTravelModeEnabled(false);
+    setTravelModeExpiresAt(null);
+    pushToast("Modo viaje desactivado", "info");
+  };
 
   const shared = {
     items,
@@ -106,7 +142,14 @@ export default function App() {
     autoLockMinutes,
     setAutoLockMinutes,
     autoLockGraceSeconds,
-    setAutoLockGraceSeconds
+    setAutoLockGraceSeconds,
+    travelModeActive,
+    travelModeEnabled,
+    travelModeDurationMinutes,
+    setTravelModeDurationMinutes,
+    travelModeExpiresAt,
+    activateTravelMode,
+    deactivateTravelMode
   };
 
   if (pathname === "/unlock-qr") {
