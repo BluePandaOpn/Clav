@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Copy, Download, KeyRound, Lock, SearchCheck, Shield, Smartphone, Trash, Usb } from "lucide-react";
 import { api } from "../utils/api.js";
 
@@ -12,7 +12,9 @@ export default function SettingsPage({
   autoLockEnabled,
   setAutoLockEnabled,
   autoLockMinutes,
-  setAutoLockMinutes
+  setAutoLockMinutes,
+  autoLockGraceSeconds,
+  setAutoLockGraceSeconds
 }) {
   const [qr, setQr] = useState(null);
   const [qrImage, setQrImage] = useState("");
@@ -272,6 +274,13 @@ export default function SettingsPage({
     setAutoLockMinutes?.(clamped);
   };
 
+  const onAutoLockGraceChange = (value) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    const clamped = Math.max(0, Math.min(30, parsed));
+    setAutoLockGraceSeconds?.(clamped);
+  };
+
   return (
     <section>
       <header className="page-head">
@@ -402,7 +411,19 @@ export default function SettingsPage({
               disabled={!autoLockEnabled}
             />
           </label>
-          <small className="muted">Rango permitido: 0.25 a 240 minutos.</small>
+          <label>
+            Gracia para foco/pestana/mouse (segundos)
+            <input
+              type="number"
+              min="0"
+              max="30"
+              step="0.5"
+              value={autoLockGraceSeconds}
+              onChange={(e) => onAutoLockGraceChange(e.target.value)}
+              disabled={!autoLockEnabled}
+            />
+          </label>
+          <small className="muted">Inactividad: 0.25 a 240 min. Gracia: 0 a 30 seg.</small>
         </article>
 
         <article className="action-card">

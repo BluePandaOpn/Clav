@@ -13,10 +13,25 @@
       "category": "General",
       "notes": "Password ",
       "createdAt": "2026-02-22T13:08:14.641Z",
-      "updatedAt": "2026-02-22T13:08:14.641Z"
+      "updatedAt": "2026-02-22T13:08:14.641Z",
+      "breachStatus": {
+        "compromised": false,
+        "pwnedCount": 0,
+        "sources": [],
+        "checkedAt": "2026-02-22T14:07:14.274Z",
+        "hibpError": null
+      }
     }
   ],
   "trustedDevices": [
+    {
+      "id": "fef9c659-a3eb-4735-bf1f-84e93caaaba7",
+      "label": "mobile-scanner",
+      "ip": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      "source": "qr_unlock",
+      "createdAt": "2026-02-22T14:07:42.946Z"
+    },
     {
       "id": "680a8bf8-69c7-4df7-b778-9421046f8670",
       "label": "mobile-scanner",
@@ -27,6 +42,22 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "ce47acfc-ba82-4ff3-b3e0-919e20a60624",
+      "type": "QR_CHALLENGE_APPROVED",
+      "detail": "91263066-fbed-49a6-bd03-eb21ad57b1aa",
+      "ip": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      "createdAt": "2026-02-22T14:07:42.949Z"
+    },
+    {
+      "id": "27292e63-aaab-4075-8b6a-a8874c4e100c",
+      "type": "QR_CHALLENGE_CREATED",
+      "detail": "91263066-fbed-49a6-bd03-eb21ad57b1aa",
+      "ip": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      "createdAt": "2026-02-22T14:07:35.110Z"
+    },
     {
       "id": "25938c72-9c96-4faa-b082-5c9f21c44be2",
       "type": "QR_CHALLENGE_CREATED",

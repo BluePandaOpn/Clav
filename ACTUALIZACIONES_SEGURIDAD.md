@@ -35,7 +35,7 @@ Fecha: 2026-02-22
 - Bloqueo inmediato al ocultar/cambiar de pestana.
 - Bloqueo inmediato por perdida de foco de ventana.
 - Bloqueo inmediato cuando el mouse sale de la ventana.
-- Integracion en `Settings` para activar/desactivar y definir minutos de inactividad.
+- Integracion en `Settings` para activar/desactivar, definir minutos de inactividad y segundos de gracia.
 
 ## Cambios implementados
 

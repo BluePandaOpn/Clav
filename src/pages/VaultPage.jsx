@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Plus, Search, ShieldAlert } from "lucide-react";
 import PasswordCard from "../components/PasswordCard.jsx";
 import PasswordStrength from "../components/PasswordStrength.jsx";

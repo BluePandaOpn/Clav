@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { AlertTriangle, Copy, Eye, EyeOff, Trash2 } from "lucide-react";
 
 export default function PasswordCard({ item, onDelete, onCopy, onReveal }) {

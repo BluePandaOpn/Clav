@@ -1,3 +1,4 @@
+import React from "react";
 import { AlertTriangle, KeyRound, Shield, Sparkles } from "lucide-react";
 
 function Stat({ icon: Icon, label, value }) {

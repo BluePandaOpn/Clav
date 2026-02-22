@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import AppShell from "./components/AppShell.jsx";
 import MasterPasswordGate from "./components/MasterPasswordGate.jsx";
@@ -16,6 +16,7 @@ import { useVaultSecurity } from "./hooks/useVaultSecurity.js";
 
 export default function App() {
   const location = useLocation();
+  const pathname = location.pathname.replace(/\/+$/, "") || "/";
   const security = useVaultSecurity();
   const {
     items,
@@ -35,6 +36,7 @@ export default function App() {
   const seenCompromisedRef = useRef(new Set());
   const [autoLockEnabled, setAutoLockEnabled] = useLocalStorage("vault_auto_lock_enabled_v016", true);
   const [autoLockMinutes, setAutoLockMinutes] = useLocalStorage("vault_auto_lock_minutes_v016", 5);
+  const [autoLockGraceSeconds, setAutoLockGraceSeconds] = useLocalStorage("vault_auto_lock_grace_secs_v016", 1.5);
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -66,6 +68,7 @@ export default function App() {
     enabled: Boolean(autoLockEnabled),
     isUnlocked: security.isUnlocked,
     inactivityMs: Math.max(0.25, Number(autoLockMinutes) || 5) * 60 * 1000,
+    immediateLockDelayMs: Math.max(0, Number(autoLockGraceSeconds) || 0) * 1000,
     onLock: security.lock,
     onAutoLock: (reason) => {
       const reasonLabel =
@@ -101,14 +104,17 @@ export default function App() {
     autoLockEnabled,
     setAutoLockEnabled,
     autoLockMinutes,
-    setAutoLockMinutes
+    setAutoLockMinutes,
+    autoLockGraceSeconds,
+    setAutoLockGraceSeconds
   };
 
-  if (location.pathname === "/unlock-qr") {
+  if (pathname === "/unlock-qr") {
     return (
       <>
         <Routes>
           <Route path="/unlock-qr" element={<UnlockQrPage pushToast={pushToast} />} />
+          <Route path="*" element={<Navigate to="/unlock-qr" replace />} />
         </Routes>
         <ToastStack items={toasts} onClose={removeToast} />
       </>
@@ -136,6 +142,7 @@ export default function App() {
         <Route path="/vault" element={<VaultPage {...shared} />} />
         <Route path="/generator" element={<GeneratorPage {...shared} />} />
         <Route path="/settings" element={<SettingsPage {...shared} />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
       <ToastStack items={toasts} onClose={removeToast} />
     </AppShell>
