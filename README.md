@@ -33,6 +33,7 @@ Gestor de passwords profesional con:
 - Cofre compartido (5.1): compartir con familia/equipos/empresas con permisos lectura, escritura y temporal
 - Emergency Access (5.2): acceso de emergencia al vault si el owner no responde en X dias
 - Modo offline completo (5.3): operaciones locales sin internet + sincronizacion automatica al reconectar
+- Desbloqueo por QR mejorado (5.4): token de un solo uso, expiracion dinamica, firma digital y push notifications
 
 ## Requisitos
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Copy, Download, KeyRound, Lock, SearchCheck, Shield, Smartphone, Trash, Usb } from "lucide-react";
 import { api } from "../utils/api.js";
+import { API_BASE } from "../utils/api.js";
 
 export default function SettingsPage({
   clearAll,
@@ -71,6 +72,9 @@ export default function SettingsPage({
   const [selectedEmergencyContactId, setSelectedEmergencyContactId] = useState("");
   const [selectedEmergencyRequestId, setSelectedEmergencyRequestId] = useState("");
   const [emergencyGrantPreview, setEmergencyGrantPreview] = useState(null);
+  const [notificationPermission, setNotificationPermission] = useState(
+    typeof Notification !== "undefined" ? Notification.permission : "unsupported"
+  );
 
   useEffect(() => {
     loadSecurityData();
@@ -87,6 +91,7 @@ export default function SettingsPage({
         const data = await api.getQrChallengeStatus(qr.challengeId);
         if (data.status === "approved") {
           pushToast("QR aprobado: dispositivo registrado", "success");
+          notifyBrowser("QR desbloqueo aprobado", "Un dispositivo fue autorizado correctamente.");
           setQr((prev) => (prev ? { ...prev, status: "approved" } : prev));
           loadSecurityData();
           window.clearInterval(timer);
@@ -102,6 +107,25 @@ export default function SettingsPage({
 
     return () => window.clearInterval(timer);
   }, [qr?.challengeId, pushToast]);
+
+  useEffect(() => {
+    const sse = new EventSource(`${API_BASE}/sync/events`);
+    const onSync = (evt) => {
+      try {
+        const data = JSON.parse(evt.data || "{}");
+        if (data?.type === "qr.challenge.approved" && qr?.challengeId && data.challengeId === qr.challengeId) {
+          notifyBrowser("QR desbloqueo aprobado", `Aprobado por ${data.approverDevice || "dispositivo"}.`);
+        }
+      } catch {
+        // Ignore malformed events.
+      }
+    };
+    sse.addEventListener("sync", onSync);
+    return () => {
+      sse.removeEventListener("sync", onSync);
+      sse.close();
+    };
+  }, [qr?.challengeId]);
 
   const loadSecurityData = async () => {
     try {
@@ -163,8 +187,23 @@ export default function SettingsPage({
       setQr({ ...data, status: "pending" });
       setQrImage(image);
       pushToast("QR seguro generado", "success");
+      notifyBrowser("QR generado", `Challenge de un solo uso creado (expira en ${data.ttlSeconds || "?"}s).`);
     } catch (error) {
       pushToast(error.message, "error");
+    }
+  };
+
+  const enablePushNotifications = async () => {
+    if (typeof Notification === "undefined") {
+      pushToast("Notificaciones no soportadas en este navegador.", "error");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    if (permission === "granted") {
+      pushToast("Notificaciones push habilitadas.", "success");
+    } else {
+      pushToast("Permiso de notificaciones denegado.", "info");
     }
   };
 
@@ -601,6 +640,10 @@ export default function SettingsPage({
         <article className="action-card">
           <h3>QR unlock avanzado</h3>
           <p>Genera un QR temporal de un solo uso para autorizar un dispositivo.</p>
+          <small className="muted">Push notifications: {notificationPermission}</small>
+          <button className="icon-btn" type="button" onClick={enablePushNotifications}>
+            Activar notificaciones
+          </button>
           <label>
             Nombre del dispositivo origen
             <input value={deviceLabel} onChange={(e) => setDeviceLabel(e.target.value)} />
@@ -612,6 +655,7 @@ export default function SettingsPage({
             <div className="qr-box">
               {qrImage ? <img src={qrImage} alt="QR de desbloqueo" /> : null}
               <small>Estado: {qr.status}</small>
+              {qr.ttlSeconds ? <small>TTL dinamico: {qr.ttlSeconds}s</small> : null}
               <small>Expira: {new Date(qr.expiresAt).toLocaleString("es-ES")}</small>
               <button className="icon-btn" type="button" onClick={copyQrUrl}>
                 <Copy size={16} /> Copiar URL
@@ -1131,4 +1175,14 @@ export default function SettingsPage({
 function buildQrImageUrl(text) {
   const encoded = encodeURIComponent(text);
   return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encoded}`;
+}
+
+function notifyBrowser(title, body) {
+  if (typeof Notification === "undefined") return;
+  if (Notification.permission !== "granted") return;
+  try {
+    new Notification(title, { body });
+  } catch {
+    // Ignore notification failures.
+  }
 }

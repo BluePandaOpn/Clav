@@ -13,12 +13,13 @@ export default function UnlockQrPage({ pushToast }) {
       cid: search.get("cid") || "",
       code: search.get("code") || "",
       exp: search.get("exp") || "",
-      sig: search.get("sig") || ""
+      sig: search.get("sig") || "",
+      tok: search.get("tok") || ""
     };
   }, []);
 
   const approve = async () => {
-    if (!params.cid || !params.code || !params.exp || !params.sig) {
+    if (!params.cid || !params.code || !params.exp || !params.sig || !params.tok) {
       setStatus("error");
       setMessage("URL invalida o incompleta.");
       return;
@@ -28,6 +29,7 @@ export default function UnlockQrPage({ pushToast }) {
       await api.approveQr({
         ...params,
         exp: Number(params.exp),
+        token: params.tok,
         deviceLabel
       });
       setStatus("ok");

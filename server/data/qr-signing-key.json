@@ -1,0 +1,7 @@
+{
+  "alg": "ed25519",
+  "kid": "qr-signing-ed25519-v2",
+  "privateKeyPem": "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEID52TxuGfg/Lby5ZXsOqPGXZZxQNp9DTQ6oXAOyfvJki\n-----END PRIVATE KEY-----\n",
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAlYAqoRGEHZmyAsvE9a2rmkYqfUZCWWdIr3FM41MyaHg=\n-----END PUBLIC KEY-----\n",
+  "createdAt": "2026-02-22T14:58:07.452Z"
+}

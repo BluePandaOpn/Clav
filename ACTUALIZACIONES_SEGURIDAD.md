@@ -218,6 +218,18 @@ Fecha: 2026-02-22
   - permite sincronizacion manual desde `Settings`.
 - Se muestra estado `offline/online` y cantidad de cambios pendientes.
 
+## 5.4 - Desbloqueo por QR mejorado
+
+- Tokens de un solo uso en challenge QR (`tok`).
+- Expiracion dinamica del challenge (TTL ajustado por contexto de riesgo).
+- Firma digital de challenge con `Ed25519` (clave dedicada de QR).
+- Notificaciones push en cliente (Notification API) para:
+  - challenge generado.
+  - challenge aprobado.
+- Eventos en tiempo real por `sync`:
+  - `qr.challenge.created`
+  - `qr.challenge.approved`
+
 ## Cambios implementados
 
 - Se agrego firma digital por entrada de credencial en backend (`Ed25519`).

@@ -423,6 +423,12 @@ api.post(
     ip: getIp(req),
     userAgent: getUa(req)
   });
+  syncHub.publish({
+    type: "qr.challenge.created",
+    challengeId: challenge.challengeId,
+    expiresAt: challenge.expiresAt,
+    ttlSeconds: challenge.ttlSeconds
+  });
   return res.status(201).json(challenge);
   })
 );
@@ -435,37 +441,40 @@ api.get("/qr/challenge/:id", (req, res) => {
 api.post(
   "/qr/approve",
   asyncHandler(async (req, res) => {
-  const { cid, code, exp, sig, deviceLabel } = req.body || {};
-  if (!cid || !code || !exp || !sig) {
-    return res.status(400).json({ error: "cid, code, exp and sig are required" });
+  const { cid, code, exp, sig, tok, token, deviceLabel } = req.body || {};
+  if (!cid || !code || !exp || !sig || !(tok || token)) {
+    return res.status(400).json({ error: "cid, code, exp, sig and token are required" });
   }
   const approved = approveQrChallenge({
     cid: String(cid),
     code: String(code),
     exp: Number(exp),
     sig: String(sig),
+    token: String(tok || token),
     deviceLabel: String(deviceLabel || "scanner")
   });
 
-  const trustedDevice = approved.alreadyApproved
-    ? null
-    : await addTrustedDevice({
-        label: approved.approverDevice,
-        ip: getIp(req),
-        userAgent: getUa(req),
-        source: "qr_unlock"
-      });
+  const trustedDevice = await addTrustedDevice({
+    label: approved.approverDevice,
+    ip: getIp(req),
+    userAgent: getUa(req),
+    source: "qr_unlock"
+  });
 
-  if (!approved.alreadyApproved) {
-    await addAuditLog({
-      type: "QR_CHALLENGE_APPROVED",
-      detail: approved.challengeId,
-      ip: getIp(req),
-      userAgent: getUa(req)
-    });
-  }
+  await addAuditLog({
+    type: "QR_CHALLENGE_APPROVED",
+    detail: approved.challengeId,
+    ip: getIp(req),
+    userAgent: getUa(req)
+  });
+  syncHub.publish({
+    type: "qr.challenge.approved",
+    challengeId: approved.challengeId,
+    approvedAt: approved.approvedAt,
+    approverDevice: approved.approverDevice
+  });
 
-  return res.status(approved.alreadyApproved ? 200 : 201).json({ approved, trustedDevice });
+  return res.status(201).json({ approved, trustedDevice });
   })
 );
 
